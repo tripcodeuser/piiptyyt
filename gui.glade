@@ -12,7 +12,7 @@
     <data>
       <row>
         <col id="0">tablecat.png</col>
-        <col id="1" translatable="yes">Hello I am table cat</col>
+        <col id="1" translatable="yes">hello i am table cat</col>
       </row>
     </data>
   </object>
@@ -115,12 +115,34 @@
           </packing>
         </child>
         <child>
-          <object class="GtkTreeView" id="treeview1">
+          <object class="GtkTreeView" id="tweet_view">
             <property name="width_request">500</property>
             <property name="height_request">250</property>
             <property name="visible">True</property>
             <property name="can_focus">True</property>
             <property name="model">tweet_model</property>
+            <child>
+              <object class="GtkTreeViewColumn" id="view_userpic_column">
+                <property name="title">userpic</property>
+                <child>
+                  <object class="GtkCellRendererPixbuf" id="view_userpic_renderer"/>
+                  <attributes>
+                    <attribute name="pixbuf">0</attribute>
+                  </attributes>
+                </child>
+              </object>
+            </child>
+            <child>
+              <object class="GtkTreeViewColumn" id="view_tweet_column">
+                <property name="title">tweet</property>
+                <child>
+                  <object class="GtkCellRendererText" id="view_tweet_renderer"/>
+                  <attributes>
+                    <attribute name="text">1</attribute>
+                  </attributes>
+                </child>
+              </object>
+            </child>
           </object>
           <packing>
             <property name="position">1</property>
