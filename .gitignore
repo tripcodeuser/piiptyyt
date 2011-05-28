@@ -1,3 +1,6 @@
 *~
 .*.sw[opn]
 *.o
+
+# targets produced by make
+piiptyyt
