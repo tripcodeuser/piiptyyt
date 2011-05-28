@@ -43,14 +43,25 @@ GObject *ui_object(GtkBuilder *b, const char *id)
 }
 
 
+static gboolean main_wnd_delete(GtkWidget *obj, GdkEvent *ev, void *data) {
+	/* geez. this sure feels like bureaucracy right here */
+	return FALSE;
+}
+
+
 int main(int argc, char *argv[])
 {
 	gtk_init(&argc, &argv);
 	GtkBuilder *b = load_ui();
 
-	GtkWindow *main_wnd = GTK_WINDOW(ui_object(b, "piiptyyt_main_wnd"));
+	GObject *main_wnd = ui_object(b, "piiptyyt_main_wnd");
+	g_signal_connect(main_wnd, "delete-event",
+		G_CALLBACK(&main_wnd_delete), NULL);
+	g_signal_connect(main_wnd, "destroy",
+		G_CALLBACK(&gtk_main_quit), NULL);
 	gtk_widget_show(GTK_WIDGET(main_wnd));
 
+	g_object_unref(G_OBJECT(b));
 	gtk_main();
 
 	return EXIT_SUCCESS;
