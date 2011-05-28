@@ -2,7 +2,21 @@
 <interface>
   <requires lib="gtk+" version="2.16"/>
   <!-- interface-naming-policy project-wide -->
-  <object class="GtkWindow" id="window1">
+  <object class="GtkListStore" id="tweet_model">
+    <columns>
+      <!-- column-name userpic -->
+      <column type="GdkPixbuf"/>
+      <!-- column-name tweet -->
+      <column type="gchararray"/>
+    </columns>
+    <data>
+      <row>
+        <col id="0">tablecat.png</col>
+        <col id="1" translatable="yes">Hello I am table cat</col>
+      </row>
+    </data>
+  </object>
+  <object class="GtkWindow" id="piiptyyt_main_wnd">
     <child>
       <object class="GtkVBox" id="vbox1">
         <property name="visible">True</property>
@@ -102,6 +116,8 @@
         </child>
         <child>
           <object class="GtkTreeView" id="treeview1">
+            <property name="width_request">500</property>
+            <property name="height_request">250</property>
             <property name="visible">True</property>
             <property name="can_focus">True</property>
             <property name="model">tweet_model</property>
@@ -116,25 +132,95 @@
             <property name="spacing">5</property>
             <property name="layout_style">center</property>
             <child>
-              <placeholder/>
+              <object class="GtkButton" id="button1">
+                <property name="label" translatable="yes">button</property>
+                <property name="visible">True</property>
+                <property name="can_focus">True</property>
+                <property name="receives_default">True</property>
+              </object>
+              <packing>
+                <property name="expand">False</property>
+                <property name="fill">False</property>
+                <property name="position">0</property>
+              </packing>
             </child>
             <child>
-              <placeholder/>
+              <object class="GtkButton" id="button2">
+                <property name="label" translatable="yes">button</property>
+                <property name="visible">True</property>
+                <property name="can_focus">True</property>
+                <property name="receives_default">True</property>
+              </object>
+              <packing>
+                <property name="expand">False</property>
+                <property name="fill">False</property>
+                <property name="position">1</property>
+              </packing>
             </child>
             <child>
-              <placeholder/>
+              <object class="GtkButton" id="button3">
+                <property name="label" translatable="yes">button</property>
+                <property name="visible">True</property>
+                <property name="can_focus">True</property>
+                <property name="receives_default">True</property>
+              </object>
+              <packing>
+                <property name="expand">False</property>
+                <property name="fill">False</property>
+                <property name="position">2</property>
+              </packing>
             </child>
             <child>
-              <placeholder/>
+              <object class="GtkButton" id="button4">
+                <property name="label" translatable="yes">button</property>
+                <property name="visible">True</property>
+                <property name="can_focus">True</property>
+                <property name="receives_default">True</property>
+              </object>
+              <packing>
+                <property name="expand">False</property>
+                <property name="fill">False</property>
+                <property name="position">3</property>
+              </packing>
             </child>
             <child>
-              <placeholder/>
+              <object class="GtkButton" id="button5">
+                <property name="label" translatable="yes">button</property>
+                <property name="visible">True</property>
+                <property name="can_focus">True</property>
+                <property name="receives_default">True</property>
+              </object>
+              <packing>
+                <property name="expand">False</property>
+                <property name="fill">False</property>
+                <property name="position">4</property>
+              </packing>
             </child>
             <child>
-              <placeholder/>
+              <object class="GtkButton" id="button6">
+                <property name="label" translatable="yes">button</property>
+                <property name="visible">True</property>
+                <property name="can_focus">True</property>
+                <property name="receives_default">True</property>
+              </object>
+              <packing>
+                <property name="expand">False</property>
+                <property name="fill">False</property>
+                <property name="position">5</property>
+              </packing>
             </child>
             <child>
-              <placeholder/>
+              <object class="GtkButton" id="button7">
+                <property name="label" translatable="yes">button</property>
+                <property name="visible">True</property>
+                <property name="can_focus">True</property>
+                <property name="receives_default">True</property>
+              </object>
+              <packing>
+                <property name="expand">False</property>
+                <property name="fill">False</property>
+                <property name="position">6</property>
+              </packing>
             </child>
           </object>
           <packing>
@@ -144,19 +230,5 @@
         </child>
       </object>
     </child>
-  </object>
-  <object class="GtkListStore" id="tweet_model">
-    <columns>
-      <!-- column-name userpic -->
-      <column type="GdkPixbuf"/>
-      <!-- column-name tweet -->
-      <column type="gchararray"/>
-    </columns>
-    <data>
-      <row>
-        <col id="0">tablecat.png</col>
-        <col id="1" translatable="yes">Hello I am table cat</col>
-      </row>
-    </data>
   </object>
 </interface>
