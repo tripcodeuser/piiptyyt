@@ -82,9 +82,7 @@ int main(int argc, char *argv[])
 
 	struct piiptyyt_state *state = state_read(NULL);
 	if(state == NULL) {
-		state = g_new0(struct piiptyyt_state, 1);
-		state->auth_token = g_strdup("tokin' some phat state here d00d");
-		state->username = g_strdup("");
+		state = state_empty();
 		state_write(state, NULL);
 	}
 	state_free(state);

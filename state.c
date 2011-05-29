@@ -37,6 +37,15 @@ static const char *state_path(void)
 }
 
 
+struct piiptyyt_state *state_empty(void)
+{
+	struct piiptyyt_state *state = g_new0(struct piiptyyt_state, 1);
+	state->auth_token = g_strdup("");
+	state->username = g_strdup("");
+	return state;
+}
+
+
 void state_free(struct piiptyyt_state *st)
 {
 	g_free(st->username);
