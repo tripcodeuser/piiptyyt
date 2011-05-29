@@ -3,6 +3,10 @@
 #include <stdlib.h>
 #include <stdbool.h>
 #include <errno.h>
+#include <unistd.h>
+#include <fcntl.h>
+#include <sys/types.h>
+#include <sys/stat.h>
 #include <glib.h>
 
 #include "defs.h"
@@ -43,6 +47,21 @@ void state_free(struct piiptyyt_state *st)
 
 bool state_write(const struct piiptyyt_state *st, GError **err_p)
 {
+	const char *path = state_path();
+	int fd = open(path, O_WRONLY | O_CREAT, S_IRUSR | S_IWUSR);
+	if(fd == -1) {
+		g_set_error(err_p, 0, errno, "open(2) failed: %s",
+			g_strerror(errno));
+		return false;
+	}
+	int n = fchmod(fd, 0600);
+	if(n == -1) {
+		g_set_error(err_p, 0, errno, "fchmod(2) failed: %s",
+			g_strerror(errno));
+		close(fd);
+		return false;
+	}
+
 	GKeyFile *kf = g_key_file_new();
 	g_key_file_set_string(kf, "auth", "username", st->username);
 	g_key_file_set_string(kf, "auth", "auth_token", st->auth_token);
@@ -50,11 +69,35 @@ bool state_write(const struct piiptyyt_state *st, GError **err_p)
 	gsize length = 0;
 	gchar *contents = g_key_file_to_data(kf, &length, err_p);
 	g_key_file_free(kf);
-	if(contents == NULL) return false;
 
-	gboolean ok = g_file_set_contents(state_path(), contents, length, err_p);
-	g_free(contents);
-	return ok != FALSE;
+	/* FIXME: this should be re-engineered to write into a temporary file in
+	 * the same directory with the appropriate mode, and then rename that file
+	 * on top of the old file when the initial write has succeeded.
+	 *
+	 * i.e. this bit should be a function of its own.
+	 */
+	bool ret = false;
+	if(contents != NULL) {
+		off_t nn = lseek(fd, 0, SEEK_SET);
+		if(nn == (off_t)-1) {
+			/* FIXME: handle */
+		}
+		n = ftruncate(fd, length);
+		if(n == -1) {
+			/* FIXME: handle */
+		}
+		ssize_t n_wr = write(fd, contents, length);
+		if(n_wr == -1) {
+			/* FIXME: handle */
+		} else if(n_wr != length) {
+			/* FIXME: handle */
+		} else {
+			ret = true;
+		}
+	}
+
+	close(fd);
+	return ret;
 }
 
 
