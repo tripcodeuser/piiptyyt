@@ -16,7 +16,7 @@ clean:
 	rm -f *.o
 
 distclean: clean
-	rm -f $(TARGETS) tags
+	rm -f $(TARGETS)
 
 tags: $(wildcard *.[ch])
 	@ctags -R .
