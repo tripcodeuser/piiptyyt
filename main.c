@@ -80,6 +80,15 @@ int main(int argc, char *argv[])
 	gtk_init(&argc, &argv);
 	GtkBuilder *b = load_ui();
 
+	struct piiptyyt_state *state = state_read(NULL);
+	if(state == NULL) {
+		state = g_new0(struct piiptyyt_state, 1);
+		state->auth_token = g_strdup("tokin' some phat state here d00d");
+		state->username = g_strdup("");
+		state_write(state, NULL);
+	}
+	state_free(state);
+
 	GObject *tweet_model = ui_object(b, "tweet_model");
 	inject_test_data(tweet_model);
 

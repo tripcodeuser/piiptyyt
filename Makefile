@@ -22,8 +22,9 @@ tags: $(wildcard *.[ch])
 	@ctags -R .
 
 
-piiptyyt: main.o
+piiptyyt: main.o state.o
 	$(CC) -o $@ $^ $(CFLAGS) $(LDFLAGS) $(LIBS)
 
 
 main.o: main.c defs.h
+state.o: state.c defs.h
