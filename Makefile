@@ -1,9 +1,9 @@
 
-PKGS=gtk+-2.0
+PKGS=gtk+-2.0 libsoup-2.4
 
 CFLAGS:=-std=gnu99 -Wall -O1 -g $(shell pkg-config --cflags $(PKGS))
 LDFLAGS=
-LIBS:=$(shell pkg-config --libs $(PKGS))
+LIBS:=$(shell pkg-config --libs $(PKGS)) -loauth
 
 TARGETS=piiptyyt tags
 

@@ -3,3 +3,11 @@ real-time support and multi-account pseudonymity.
 
 Licensed under the GNU General Public License version 3, or (at your option)
 any later version published by the Free Software Foundation.
+
+To build, this package requires the following Debian packages (in addition to
+the usual C compilers and linkers etc.):
+
+  - libglib2.0-dev
+  - libgtk2.0-dev
+  - libsoup2.4-dev
+  - liboauth-dev

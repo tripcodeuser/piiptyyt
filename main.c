@@ -77,6 +77,7 @@ static gboolean main_wnd_delete(GtkWidget *obj, GdkEvent *ev, void *data) {
 
 int main(int argc, char *argv[])
 {
+	g_thread_init(NULL);
 	gtk_init(&argc, &argv);
 	GtkBuilder *b = load_ui();
 
