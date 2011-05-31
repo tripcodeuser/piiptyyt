@@ -1,6 +1,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <errno.h>
 #include <gtk/gtk.h>
 #include <glib.h>
 
@@ -8,6 +9,10 @@
 
 
 #define ERROR_FAIL(err) toplevel_err(__FILE__, __LINE__, __func__, (err))
+
+
+/* configurables. password is erased once no longer necessary. */
+static char *twitter_username, *twitter_password;
 
 
 static void toplevel_err(
@@ -19,6 +24,38 @@ static void toplevel_err(
 	fprintf(stderr, "%s:%s:%d: %s (code %d)\n", file, func, line,
 		err->message, err->code);
 	abort();
+}
+
+
+static bool read_config(void)
+{
+	bool ok = true;
+	GError *err = NULL;
+	char *cfg_path = g_build_filename(g_get_user_config_dir(),
+		"piiptyyt", "config", NULL);
+	GKeyFile *kf = g_key_file_new();
+	if(!g_key_file_load_from_file(kf, cfg_path, 0, &err)) {
+		if(err->code != ENOENT) {
+			fprintf(stderr, "can't load config: %s (code %d)\n",
+				err->message, err->code);
+			ok = false;
+		} else {
+			/* fill defaults in. */
+			twitter_username = NULL;
+			twitter_password = NULL;
+		}
+	} else {
+		/* FIXME: move these into a "per-account" group, specialized by
+		 * service
+		 */
+		twitter_username = g_key_file_get_string(kf, "auth", "username", NULL);
+		twitter_password = g_key_file_get_string(kf, "auth", "password", NULL);
+	}
+
+	g_free(cfg_path);
+	if(err != NULL) g_error_free(err);
+	g_key_file_free(kf);
+	return ok;
 }
 
 
@@ -81,12 +118,35 @@ int main(int argc, char *argv[])
 	gtk_init(&argc, &argv);
 	GtkBuilder *b = load_ui();
 
+	/* FIXME: error checks */
 	struct piiptyyt_state *state = state_read(NULL);
 	if(state == NULL) {
 		state = state_empty();
 		state_write(state, NULL);
 	}
-	state_free(state);
+
+	if(!read_config()) {
+		fprintf(stderr, "config read error!\n");
+		return EXIT_FAILURE;
+	}
+
+	if(state->auth_token == NULL || state->auth_token[0] == '\0') {
+		if(twitter_username == NULL || twitter_password == NULL) {
+			fprintf(stderr, "please stick auth info in ~/.config/piiptyyt/config .\n");
+			return EXIT_FAILURE;
+		}
+		char *token = oauth_login_classic(twitter_username, twitter_password);
+		printf("token is `%s'\n", token);
+		free(token);
+	}
+
+	if(twitter_password != NULL) {
+		for(int i=0; twitter_password[i] != '\0'; i++) {
+			twitter_password[i] = '\0';
+		}
+		g_free(twitter_password);
+		twitter_password = NULL;
+	}
 
 	GObject *tweet_model = ui_object(b, "tweet_model");
 	inject_test_data(tweet_model);
@@ -100,6 +160,10 @@ int main(int argc, char *argv[])
 
 	g_object_unref(G_OBJECT(b));
 	gtk_main();
+
+	/* TODO: check errors etc */
+	state_write(state, NULL);
+	state_free(state);
 
 	return EXIT_SUCCESS;
 }
