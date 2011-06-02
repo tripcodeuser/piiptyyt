@@ -12,10 +12,6 @@
 #define ERROR_FAIL(err) toplevel_err(__FILE__, __LINE__, __func__, (err))
 
 
-/* configurables. password is erased once no longer necessary. */
-static char *twitter_username, *twitter_password;
-
-
 static void toplevel_err(
 	const char *file,
 	int line,
@@ -31,6 +27,7 @@ static void toplevel_err(
 static bool read_config(void)
 {
 	bool ok = true;
+#if 0
 	GError *err = NULL;
 	char *cfg_path = g_build_filename(g_get_user_config_dir(),
 		"piiptyyt", "config", NULL);
@@ -43,19 +40,18 @@ static bool read_config(void)
 		} else {
 			/* fill defaults in. */
 			twitter_username = NULL;
-			twitter_password = NULL;
 		}
 	} else {
 		/* FIXME: move these into a "per-account" group, specialized by
 		 * service
 		 */
 		twitter_username = g_key_file_get_string(kf, "auth", "username", NULL);
-		twitter_password = g_key_file_get_string(kf, "auth", "password", NULL);
 	}
 
 	g_free(cfg_path);
 	if(err != NULL) g_error_free(err);
 	g_key_file_free(kf);
+#endif
 	return ok;
 }
 
@@ -138,34 +134,6 @@ int main(int argc, char *argv[])
 		return EXIT_FAILURE;
 	}
 
-	if(state->auth_token == NULL || state->auth_token[0] == '\0') {
-		if(twitter_username == NULL || twitter_password == NULL) {
-			fprintf(stderr, "please stick auth info in ~/.config/piiptyyt/config .\n");
-			return EXIT_FAILURE;
-		}
-		/* TODO: perform actual login, return genuine auth bits... instead of
-		 * an unauthorized token and its secret.
-		 */
-		char *token = NULL, *token_secret = NULL;
-		if(oauth_login_classic(&token, &token_secret, 
-			twitter_username, twitter_password))
-		{
-			printf("token is `%s', secret is `%s'\n", token, token_secret);
-			g_free(token);
-			g_free(token_secret);
-		} else {
-			printf("login failed.\n");
-		}
-	}
-
-	if(twitter_password != NULL) {
-		for(int i=0; twitter_password[i] != '\0'; i++) {
-			twitter_password[i] = '\0';
-		}
-		g_free(twitter_password);
-		twitter_password = NULL;
-	}
-
 	GObject *tweet_model = ui_object(b, "tweet_model");
 	inject_test_data(tweet_model);
 
@@ -177,6 +145,26 @@ int main(int argc, char *argv[])
 	gtk_widget_show(GTK_WIDGET(main_wnd));
 
 	g_object_unref(G_OBJECT(b));
+	b = NULL;
+
+	while(state->auth_token == NULL || state->auth_token[0] == '\0') {
+		char *username, *token, *secret;
+		uint64_t userid;
+		GError *err = NULL;
+		if(oauth_login(&username, &token, &secret, &userid, &err)) {
+			g_free(state->auth_token); state->auth_token = token;
+			g_free(state->auth_secret); state->auth_secret = secret;
+			g_free(state->username); state->username = username;
+			state->userid = userid;
+			printf("got new oauth tokens.\n");
+			state_write(state, NULL);
+			printf("tokens saved.\n");
+		} else {
+			printf("login failed: %s (code %d).\n", err->message, err->code);
+			g_error_free(err);
+		}
+	}
+
 	gtk_main();
 
 	/* TODO: check errors etc */

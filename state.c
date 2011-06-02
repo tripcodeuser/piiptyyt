@@ -40,8 +40,10 @@ static const char *state_path(void)
 struct piiptyyt_state *state_empty(void)
 {
 	struct piiptyyt_state *state = g_new0(struct piiptyyt_state, 1);
-	state->auth_token = g_strdup("");
-	state->username = g_strdup("");
+	state->auth_token = NULL;
+	state->auth_secret = NULL;
+	state->username = NULL;
+	state->userid = 0;
 	return state;
 }
 
@@ -50,6 +52,7 @@ void state_free(struct piiptyyt_state *st)
 {
 	g_free(st->username);
 	g_free(st->auth_token);
+	g_free(st->auth_secret);
 	g_free(st);
 }
 
@@ -74,6 +77,8 @@ bool state_write(const struct piiptyyt_state *st, GError **err_p)
 	GKeyFile *kf = g_key_file_new();
 	g_key_file_set_string(kf, "auth", "username", st->username);
 	g_key_file_set_string(kf, "auth", "auth_token", st->auth_token);
+	g_key_file_set_string(kf, "auth", "auth_secret", st->auth_secret);
+	g_key_file_set_uint64(kf, "auth", "userid", st->userid);
 
 	gsize length = 0;
 	gchar *contents = g_key_file_to_data(kf, &length, err_p);
@@ -133,6 +138,8 @@ struct piiptyyt_state *state_read(GError **err_p)
 	struct piiptyyt_state *st = g_new(struct piiptyyt_state, 1);
 	st->username = g_key_file_get_string(kf, "auth", "username", NULL);
 	st->auth_token = g_key_file_get_string(kf, "auth", "auth_token", NULL);
+	st->auth_secret = g_key_file_get_string(kf, "auth", "auth_secret", NULL);
+	st->userid = g_key_file_get_uint64(kf, "auth", "userid", NULL);
 	g_key_file_free(kf);
 
 	return st;

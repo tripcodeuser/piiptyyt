@@ -32,14 +32,16 @@ static char *read_consumer_secret(GError **err_p)
 }
 
 
-bool oauth_login_classic(
-	char **token_p,
-	char **token_secret_p,
-	const char *username,
-	const char *password)
+bool oauth_login(
+	char **username_p,
+	char **auth_token_p,
+	char **auth_secret_p,
+	uint64_t *userid_p,
+	GError *err_p)
 {
 	GError *err = NULL;
 
+	/* TODO: replace these with constants */
 	char *consumer_key = read_consumer_key(&err);
 	if(consumer_key == NULL) {
 		fprintf(stderr, "%s: failed (%s [code %d])\n", __func__,
@@ -109,9 +111,9 @@ bool oauth_login_classic(
 			}
 			*(eq++) = '\0';
 			if(strcmp(pieces[i], "oauth_token") == 0) {
-				*token_p = g_strdup(eq);
+				*auth_token_p = g_strdup(eq);
 			} else if(strcmp(pieces[i], "oauth_token_secret") == 0) {
-				*token_secret_p = g_strdup(eq);
+				*auth_secret_p = g_strdup(eq);
 			} else if(strcmp(pieces[i], "oauth_callback_confirmed") == 0) {
 				/* ignoring callback confirmation, since this is a desktop
 				 * client and won't have a publicly visible endpoint.

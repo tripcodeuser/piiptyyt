@@ -2,6 +2,7 @@
 #ifndef SEEN_DEFS_H
 #define SEEN_DEFS_H
 
+#include <stdint.h>
 #include <stdbool.h>
 #include <glib.h>
 
@@ -10,7 +11,8 @@
 struct piiptyyt_state
 {
 	char *username;
-	char *auth_token;	/* access token in oauth speak */
+	char *auth_token, *auth_secret;
+	uint64_t userid;
 };
 
 
@@ -24,11 +26,15 @@ extern void state_free(struct piiptyyt_state *state);
 
 /* from login.c */
 
-extern bool oauth_login_classic(
-	char **token_p,
-	char **token_secret_p,
-	const char *username,
-	const char *password);
+/* returns false, fills in *err_p (when not NULL) on error. on success returns
+ * true and fills in the other parameters. output strings are caller-free.
+ */
+extern bool oauth_login(
+	char **username_p,
+	char **auth_token_p,
+	char **auth_secret_p,
+	uint64_t *userid_p,
+	GError *err_p);
 
 
 /* from oauth.c */
