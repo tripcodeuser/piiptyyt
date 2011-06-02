@@ -95,19 +95,15 @@ bool oauth_login(
 //	const char *token_uri = "https://api.twitter.com/oauth/request_token";
 	const char *token_uri = "https://localhost/cgi-bin/oauth.cgi/request_token";
 
-	/* for the moment, synchronous operation. this should dip down into the
-	 * glib main loop at some point, though.
-	 */
-	SoupSession *ss = soup_session_sync_new();
-#if 0
-	SoupLogger *logger = soup_logger_new(2, -1);
+	SoupSession *ss = soup_session_async_new();
+#if 1
+	SoupLogger *logger = soup_logger_new(1, -1);
 	soup_session_add_feature(ss, SOUP_SESSION_FEATURE(logger));
 	g_object_unref(logger);
 #endif
 
 	SoupMessage *msg = make_token_request_msg(token_uri, consumer_key,
 		consumer_secret);
-	printf("sending token request...\n");
 	soup_session_send_message(ss, msg);
 
 	bool ok;
@@ -117,7 +113,6 @@ bool oauth_login(
 		ok = false;
 	} else {
 		/* interpret the response. */
-		printf("got token request response.\n");
 		const char *resp = msg->response_body->data;
 		char **pieces = g_strsplit(resp, "&", 0);
 		for(int i=0; pieces[i] != NULL; i++) {
