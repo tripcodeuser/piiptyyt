@@ -15,6 +15,13 @@
 #include "defs.h"
 
 
+/* for testing: uses OAuth URIs that're served by the toy OAuth
+ * implementation, assuming a correctly configured local httpd.
+ * no browser will be launched in that case, and the PIN is 12345.
+ */
+#define USE_LOCAL_CGI 0
+
+
 struct pin_ctx
 {
 	bool done;
@@ -66,13 +73,42 @@ static SoupMessage *make_token_request_msg(
 		"Authorization", oa_auth_header(oa, OA_REQ_REQUEST_TOKEN));
 #elif 1
 	char *body = oa_request_params_to_post_body(oa, OA_REQ_REQUEST_TOKEN);
-	soup_message_set_request(msg, "application/x-www-form-urlencoded",
+	soup_message_set_request(msg, OA_POST_MIME_TYPE,
 		SOUP_MEMORY_COPY, body, strlen(body));
 #else
 	GHashTable *query = oa_request_token_params(oa);
 	soup_uri_set_query_from_form(soup_message_get_uri(msg), query);
 	g_hash_table_destroy(query);
 #endif
+
+	oa_req_free(oa);
+	return msg;
+}
+
+
+static SoupMessage *make_access_token_request_msg(
+	const char *uri,
+	const char *req_token,
+	const char *req_secret,
+	const char *verifier,
+	const char *consumer_key,
+	const char *consumer_secret)
+{
+	struct oauth_request *oa = oa_req_new_with_params(consumer_key,
+		consumer_secret, uri, "POST", SIG_HMAC_SHA1, NULL);
+	oa_set_token(oa, req_token, req_secret);
+	oa_set_verifier(oa, verifier);
+	if(!oa_sign_request(oa, OA_REQ_ACCESS_TOKEN)) {
+		/* FIXME: do something */
+		printf("arashgrjhagkhfasfa\n");
+		oa_req_free(oa);
+		return NULL;
+	}
+
+	SoupMessage *msg = soup_message_new("POST", uri);
+	char *body = oa_request_params_to_post_body(oa, OA_REQ_ACCESS_TOKEN);
+	soup_message_set_request(msg, OA_POST_MIME_TYPE,
+		SOUP_MEMORY_COPY, body, strlen(body));
 
 	oa_req_free(oa);
 	return msg;
@@ -184,11 +220,16 @@ bool oauth_login(
 		return false;
 	}
 
+#if !USE_LOCAL_CGI
 	const char *token_uri = "https://api.twitter.com/oauth/request_token";
-//	const char *token_uri = "https://localhost/cgi-bin/oauth.cgi/request_token";
+	const char *access_uri = "https://api.twitter.com/oauth/access_token";
+#else
+	const char *token_uri = "https://localhost/cgi-bin/oauth.cgi/request_token";
+	const char *access_uri = "https://localhost/cgi-bin/oauth.cgi/access_token";
+#endif
 
 	SoupSession *ss = soup_session_async_new();
-#if 1
+#if 0
 	SoupLogger *logger = soup_logger_new(1, -1);
 	soup_session_add_feature(ss, SOUP_SESSION_FEATURE(logger));
 	g_object_unref(logger);
@@ -196,6 +237,10 @@ bool oauth_login(
 
 	SoupMessage *msg = make_token_request_msg(token_uri, consumer_key,
 		consumer_secret);
+	if(msg == NULL) {
+		/* FIXME */
+		abort();
+	}
 	soup_session_send_message(ss, msg);
 
 	bool ok;
@@ -207,34 +252,66 @@ bool oauth_login(
 	}
 
 	/* interpret the response. */
-	char **output = oa_parse_response(msg->response_body->data,
+	char **rt_output = oa_parse_response(msg->response_body->data,
 		"oauth_token", "oauth_token_secret", NULL);
-	if(output == NULL) {
+	if(rt_output == NULL) {
 		g_set_error(err_p, 0, EINVAL, "can't parse response data");
 		ok = false;
 		goto end;
 	}
 
-	const char *req_token = output[0], *req_secret = output[1];
+	/* do out-of-band OAuth */
+	const char *req_token = rt_output[0], *req_secret = rt_output[1];
+#if !USE_LOCAL_CGI
 	int rc = launch_authorization_browser(req_token);
 	if(rc != EXIT_SUCCESS) {
 		fprintf(stderr, "warning: browser launching failed.\n");
 	}
+#endif
 
 	char *pin = query_pin(builder);
 	printf("PIN is: `%s'\n", pin);
-	g_free(pin);
 
-	g_strfreev(output);
+	/* get an access token */
+	g_object_unref(msg);
+	msg = make_access_token_request_msg(access_uri, req_token, req_secret,
+		pin, consumer_key, consumer_secret);
+	g_free(pin);
+	if(msg == NULL) {
+		fprintf(stderr, "can't sign access request message!\n");
+		abort();
+	}
+	soup_session_send_message(ss, msg);
+
+	if(msg->status_code != SOUP_STATUS_OK) {
+		fprintf(stderr, "%s: server returned status %d (%s)\n", __func__,
+			msg->status_code, soup_status_get_phrase(msg->status_code));
+		/* FIXME: handle */
+		abort();
+	}
+	char **at_output = oa_parse_response(msg->response_body->data,
+		"oauth_token", "oauth_token_secret", "user_id", "screen_name", NULL);
+	if(at_output == NULL) {
+		/* FIXME: response data parsing fail */
+		abort();
+	}
+	/* the payoff */
+	*auth_token_p = g_strdup(at_output[0]);
+	*auth_secret_p = g_strdup(at_output[1]);
+	*userid_p = strtoull(at_output[2], NULL, 10);
+	*username_p = g_strdup(at_output[3]);
+
+	printf("login successful! username `%s', userid %llu\n", *username_p,
+		(unsigned long long)*userid_p);
+
+	g_strfreev(at_output);
+	g_strfreev(rt_output);
+
 	ok = true;
 
 end:
 	g_object_unref(msg);
 	g_object_unref(ss);
 
-	ok = false;
-	if(err_p != NULL && *err_p == NULL) {
-		g_set_error(err_p, 0, ENOSYS, "incomplete");
-	}
 	return ok;
 }
