@@ -4,7 +4,12 @@
 #include <stdbool.h>
 #include <string.h>
 #include <assert.h>
+#include <unistd.h>
 #include <errno.h>
+#include <sys/types.h>
+#include <sys/wait.h>
+#include <glib.h>
+#include <gtk/gtk.h>
 #include <libsoup/soup.h>
 
 #include "defs.h"
@@ -125,6 +130,33 @@ static char *query_pin(GtkBuilder *builder)
 }
 
 
+static int launch_authorization_browser(const char *req_token)
+{
+	pid_t child = fork();
+	if(child == 0) {
+		const char *auth_uri = "https://api.twitter.com/oauth/authorize";
+		char *browser_uri = g_strdup_printf("%s?oauth_token=%s", auth_uri,
+			req_token);
+		char *argv[] = { "x-www-browser", browser_uri, NULL };
+		execvp(argv[0], argv);
+		fprintf(stderr, "failed to launch www browser: %s\n",
+			strerror(errno));
+		exit(EXIT_FAILURE);
+	} else {
+		/* clean up after. */
+		int status = 0;
+		pid_t p = waitpid(child, &status, 0);
+		if(p == (pid_t)-1) {
+			fprintf(stderr, "waitpid(2) failed: %s\n", strerror(errno));
+			/* FIXME: what now? */
+			return EXIT_FAILURE;
+		} else {
+			return WIFEXITED(status) ? WEXITSTATUS(status) : EXIT_FAILURE;
+		}
+	}
+}
+
+
 bool oauth_login(
 	GtkBuilder *builder,
 	char **username_p,
@@ -152,8 +184,8 @@ bool oauth_login(
 		return false;
 	}
 
-//	const char *token_uri = "https://api.twitter.com/oauth/request_token";
-	const char *token_uri = "https://localhost/cgi-bin/oauth.cgi/request_token";
+	const char *token_uri = "https://api.twitter.com/oauth/request_token";
+//	const char *token_uri = "https://localhost/cgi-bin/oauth.cgi/request_token";
 
 	SoupSession *ss = soup_session_async_new();
 #if 1
@@ -172,24 +204,28 @@ bool oauth_login(
 			msg->status_code, soup_status_get_phrase(msg->status_code));
 		ok = false;
 		goto end;
-	} else {
-		/* interpret the response. */
-		char **output = oa_parse_response(msg->response_body->data,
-			"oauth_token", "oauth_token_secret", NULL);
-		if(output == NULL) {
-			g_set_error(err_p, 0, EINVAL, "can't parse response data");
-			ok = false;
-			goto end;
-		}
+	}
 
-		printf("token `%s', secret `%s'\n", output[0], output[1]);
-		g_strfreev(output);
+	/* interpret the response. */
+	char **output = oa_parse_response(msg->response_body->data,
+		"oauth_token", "oauth_token_secret", NULL);
+	if(output == NULL) {
+		g_set_error(err_p, 0, EINVAL, "can't parse response data");
+		ok = false;
+		goto end;
+	}
+
+	const char *req_token = output[0], *req_secret = output[1];
+	int rc = launch_authorization_browser(req_token);
+	if(rc != EXIT_SUCCESS) {
+		fprintf(stderr, "warning: browser launching failed.\n");
 	}
 
 	char *pin = query_pin(builder);
 	printf("PIN is: `%s'\n", pin);
 	g_free(pin);
 
+	g_strfreev(output);
 	ok = true;
 
 end:
