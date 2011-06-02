@@ -5,6 +5,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <glib.h>
+#include <gtk/gtk.h>
 
 
 /* persistent, named client state. */
@@ -14,6 +15,11 @@ struct piiptyyt_state
 	char *auth_token, *auth_secret;
 	uint64_t userid;
 };
+
+
+/* from main.c */
+
+extern GObject *ui_object(GtkBuilder *b, const char *id);
 
 
 /* from state.c */
@@ -30,6 +36,7 @@ extern void state_free(struct piiptyyt_state *state);
  * true and fills in the other parameters. output strings are caller-free.
  */
 extern bool oauth_login(
+	GtkBuilder *builder,
 	char **username_p,
 	char **auth_token_p,
 	char **auth_secret_p,

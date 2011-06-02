@@ -144,14 +144,11 @@ int main(int argc, char *argv[])
 		G_CALLBACK(&gtk_main_quit), NULL);
 	gtk_widget_show(GTK_WIDGET(main_wnd));
 
-	g_object_unref(G_OBJECT(b));
-	b = NULL;
-
 	if(state->auth_token == NULL || state->auth_token[0] == '\0') {
 		char *username, *token, *secret;
 		uint64_t userid;
 		GError *err = NULL;
-		if(oauth_login(&username, &token, &secret, &userid, &err)) {
+		if(oauth_login(b, &username, &token, &secret, &userid, &err)) {
 			g_free(state->auth_token); state->auth_token = token;
 			g_free(state->auth_secret); state->auth_secret = secret;
 			g_free(state->username); state->username = username;
@@ -166,6 +163,9 @@ int main(int argc, char *argv[])
 			return EXIT_FAILURE;
 		}
 	}
+
+	g_object_unref(G_OBJECT(b));
+	b = NULL;
 
 	gtk_main();
 

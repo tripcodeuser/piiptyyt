@@ -10,6 +10,13 @@
 #include "defs.h"
 
 
+struct pin_ctx
+{
+	bool done;
+	gint response;
+};
+
+
 static char *read_consumer_key(GError **err_p)
 {
 	char *path = g_build_filename(g_get_home_dir(),
@@ -67,7 +74,59 @@ static SoupMessage *make_token_request_msg(
 }
 
 
+static void on_login_pin_response(
+	GtkDialog *dialog,
+	gint response,
+	struct pin_ctx *pin_ctx)
+{
+	if(!pin_ctx->done) {
+		pin_ctx->done = true;
+		pin_ctx->response = response;
+	}
+}
+
+
+/* pop up the PIN entry window. */
+static char *query_pin(GtkBuilder *builder)
+{
+	GtkEntry *pin_entry = GTK_ENTRY(ui_object(builder, "login_pin_entry"));
+	gtk_entry_set_text(pin_entry, "");
+
+	struct pin_ctx *pin_ctx = g_new(struct pin_ctx, 1);
+	pin_ctx->done = false;
+	pin_ctx->response = 0;
+
+	GtkButton *complete_btn = GTK_BUTTON(ui_object(builder, "login_pin_ok_btn")),
+		*cancel_btn = GTK_BUTTON(ui_object(builder, "login_pin_cancel_btn"));
+
+	GtkDialog *pin_wnd = GTK_DIALOG(ui_object(builder, "login_pin_dialog"));
+	gtk_dialog_set_default_response(pin_wnd,
+		gtk_dialog_get_response_for_widget(pin_wnd, GTK_WIDGET(cancel_btn)));
+	gulong resp = g_signal_connect(G_OBJECT(pin_wnd), "response",
+		G_CALLBACK(&on_login_pin_response), pin_ctx);
+	gtk_widget_show_all(GTK_WIDGET(pin_wnd));
+	gtk_dialog_run(pin_wnd);
+
+	gtk_widget_hide_all(GTK_WIDGET(pin_wnd));
+	char *ret;
+	if(pin_ctx->done
+		&& gtk_dialog_get_widget_for_response(pin_wnd, pin_ctx->response)
+			== GTK_WIDGET(complete_btn))
+	{
+		ret = g_strdup(gtk_entry_get_text(pin_entry));
+	} else {
+		ret = NULL;
+	}
+
+	g_free(pin_ctx);
+	g_signal_handler_disconnect(G_OBJECT(pin_wnd), resp);
+
+	return ret;
+}
+
+
 bool oauth_login(
+	GtkBuilder *builder,
 	char **username_p,
 	char **auth_token_p,
 	char **auth_secret_p,
@@ -126,6 +185,12 @@ bool oauth_login(
 		printf("token `%s', secret `%s'\n", output[0], output[1]);
 		g_strfreev(output);
 	}
+
+	char *pin = query_pin(builder);
+	printf("PIN is: `%s'\n", pin);
+	g_free(pin);
+
+	ok = true;
 
 end:
 	g_object_unref(msg);
