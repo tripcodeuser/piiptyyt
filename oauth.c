@@ -60,9 +60,9 @@ struct oauth_request *oa_req_new_with_params(
 }
 
 
-/* oauth_url_escape(), oauth_cmpstring(), and the base64 functions are
- * originally from liboauth 0.9.4, which was licensed under MIT-style
- * conditions. these are compatible with piiptyyt's GPLv3+ terms.
+/* oauth_url_escape() and the base64 functions are originally from liboauth
+ * 0.9.4, which was licensed under MIT-style conditions. these are compatible
+ * with piiptyyt's GPLv3+ terms.
  */
 static char *oauth_url_escape(const char *string) {
   size_t alloc, newlen;
@@ -116,45 +116,6 @@ static char *oauth_url_escape(const char *string) {
 }
 
 
-/* (called oauth_cmpstringp() in liboauth.) used with g_list_sort() . needed
- * to normalize request parameters. see http://oauth.net/core/1.0/#anchor14
- */
-static int oauth_cmpstringp(const void *p1, const void *p2) {
-  char *v1,*v2;
-  char *t1,*t2;
-  int rv;
-  // TODO: this is not fast - we should escape the 
-  // array elements (once) before sorting.
-  v1=oauth_url_escape(p1);
-  v2=oauth_url_escape(p2);
-
-  // '=' signs are not "%3D" !
-  if ((t1=strstr(v1,"%3D"))) {
-    t1[0]='\0'; t1[1]='='; t1[2]='=';
-  }
-  if ((t2=strstr(v2,"%3D"))) {
-    t2[0]='\0'; t2[1]='='; t2[2]='=';
-  }
-
-  // compare parameter names
-  rv=strcmp(v1,v2);
-  if (rv!=0) goto end;
-
-  // if parameter names are equal, sort by value.
-  if (t1) t1[0]='='; 
-  if (t2) t2[0]='='; 
-  if (t1 && t2)        rv=strcmp(t1,t2);
-  else if (!t1 && !t2) rv=0;
-  else if (!t1)        rv=-1;
-  else                 rv=1;
-
-end:
-  g_free(v1);
-  g_free(v2);
-  return rv;
-}
-
-
 static char oauth_b64_encode(uint8_t u)
 {
   if(u < 26)  return 'A'+u;
@@ -204,28 +165,41 @@ static char *oa_sig_base(
 	const char *uri,
 	GHashTable *params)
 {
+	/* produce a sorted list of keys and values, where keys and values are
+	 * formatted as enc(k) . "=" . enc(v)
+	 */
+	GList *keys = g_hash_table_get_keys(params);
+	for(GList *cur = g_list_first(keys);
+		cur != NULL;
+		cur = g_list_next(cur))
+	{
+		const char *key = cur->data,
+			*value = g_hash_table_lookup(params, key);
+		assert(value != NULL);
+		char *e_key = oauth_url_escape(key),
+			*e_val = oauth_url_escape(value);
+		cur->data = g_strdup_printf("%s=%s", e_key, e_val);
+		g_free(e_key);
+		g_free(e_val);
+	}
+	keys = g_list_sort(keys, (GCompareFunc)&strcmp);
+
 	GString *str = g_string_sized_new(1024);
 	g_string_append_printf(str, "%s&", method);
 	char *e_uri = oauth_url_escape(uri);
 	g_string_append_printf(str, "%s&", e_uri);
 	g_free(e_uri);
 
-	GList *keys = g_hash_table_get_keys(params);
-	keys = g_list_sort(keys, &oauth_cmpstringp);
 	for(GList *cur = g_list_first(keys);
 		cur != NULL;
 		cur = g_list_next(cur))
 	{
-		const char *key = cur->data;
-		const char *value = g_hash_table_lookup(params, key);
-		assert(value != NULL);
 		if(cur != g_list_first(keys)) g_string_append(str, "%26");
-		char *e_key = oauth_url_escape(key),
-			*e_val = oauth_url_escape(value);
-		g_string_append_printf(str, "%s%%3D%s", e_key, e_val);
-		g_free(e_key);
-		g_free(e_val);
+		char *enc = oauth_url_escape(cur->data);
+		g_string_append(str, enc);
+		g_free(enc);
 	}
+	g_list_foreach(keys, (GFunc)&g_free, NULL);
 	g_list_free(keys);
 
 	return g_string_free(str, FALSE);
@@ -247,7 +221,7 @@ static char *oa_sign_sha1(
 		if(err != 0) goto fail;
 	}
 	gcry_md_write(md, sig_base, sb_len > 0 ? sb_len : strlen(sig_base));
-	unsigned char *value = gcry_md_read(md, GCRY_MD_SHA1);
+	const void *value = gcry_md_read(md, GCRY_MD_SHA1);
 	assert(value != NULL);
 	unsigned int val_len = gcry_md_get_algo_dlen(GCRY_MD_SHA1);
 	char *ret = oauth_encode_base64(val_len, value);
@@ -286,19 +260,26 @@ static char *oa_gen_nonce(void)
 }
 
 
-bool oa_sign_request(struct oauth_request *req, int kind)
+static GHashTable *gather_params(struct oauth_request *req, int kind)
 {
 	assert(req->sig_method < G_N_ELEMENTS(sig_method_str));
 
-	bool ok = true;
+	if(req->consumer_key == NULL) return NULL;
+
+	switch(kind) {
+	case OA_REQ_REQUEST_TOKEN:
+		break;
+	default:
+		return NULL;
+	}
+
 	GHashTable *params = g_hash_table_new(&g_str_hash, &g_str_equal);
 	g_hash_table_insert(params, "oauth_version", "1.0");
-	if(req->consumer_key == NULL) goto fail;
 	g_hash_table_insert(params, "oauth_consumer_key", req->consumer_key);
 	g_hash_table_insert(params, "oauth_signature_method",
 		(void *)sig_method_str[req->sig_method]);
 	if(req->timestamp == NULL) {
-		char ts[100];
+		char ts[32];
 		struct timeval tv;
 		gettimeofday(&tv, NULL);
 		snprintf(ts, sizeof(ts), "%zu", (size_t)tv.tv_sec);
@@ -311,43 +292,123 @@ bool oa_sign_request(struct oauth_request *req, int kind)
 		g_free(nonce);
 	}
 	g_hash_table_insert(params, "oauth_nonce", req->nonce);
+	g_hash_table_insert(params, "oauth_callback",
+		req->callback_url != NULL ? req->callback_url : "");
 
-	switch(kind) {
-	case OA_REQ_REQUEST_TOKEN:
-		break;
-	default:
-		goto fail;
-	}
+	return params;
+}
+
+
+bool oa_sign_request(struct oauth_request *req, int kind)
+{
+	GHashTable *params = gather_params(req, kind);
+	if(params == NULL) return false;
 
 	char *sb = oa_sig_base(req->request_method, req->request_url, params);
-	printf("%s: sigbase is `%s'\n", __func__, sb);
-
-	GString *hmac_key = g_string_sized_new(256);
-	char *con_sec = oauth_url_escape(req->consumer_secret),
-		*tok_sec = oauth_url_escape(req->token_secret);
-	g_string_append_printf(hmac_key, "%s&%s", con_sec, tok_sec);
-	g_free(con_sec);
-	g_free(tok_sec);
 
 	char *signature;
 	switch(req->sig_method) {
-	case SIG_HMAC_SHA1:
-		signature = oa_sign_sha1(sb, 0, hmac_key->str);
+	case SIG_HMAC_SHA1: {
+		char *con_sec = oauth_url_escape(req->consumer_secret),
+			*tok_sec = oauth_url_escape(req->token_secret),
+			*hmac_key = g_strdup_printf("%s&%s", con_sec, tok_sec);
+		signature = oa_sign_sha1(sb, 0, hmac_key);
+		g_free(con_sec);
+		g_free(tok_sec);
+		g_free(hmac_key);
 		break;
+		}
 	default:
-		assert(false);
+		g_free(sb);
+		g_hash_table_destroy(params);
+		return false;
 	}
-	g_string_free(hmac_key, TRUE);
-	printf("%s: signature is `%s'\n", __func__, signature);
 	req->signature = copy(req, signature);
+
 	g_free(signature);
-	ok = true;
-
-end:
+	g_free(sb);
 	g_hash_table_destroy(params);
-	return ok;
 
-fail:
-	ok = false;
-	goto end;
+	return true;
+}
+
+
+/* gather parameters, remove secrets, insert signature. common path for the
+ * other parameter-consuming functions.
+ */
+static GHashTable *format_request_params(struct oauth_request *req, int kind)
+{
+	if(req->signature == NULL) return NULL;
+
+	GHashTable *params = gather_params(req, kind);
+	if(params == NULL) return NULL;
+
+	/* remove secrets. */
+	g_hash_table_remove(params, "oauth_consumer_secret");
+	g_hash_table_remove(params, "oauth_token_secret");
+
+	/* add stuff. */
+	g_hash_table_insert(params, "oauth_signature", req->signature);
+
+	return params;
+}
+
+
+const char *oa_auth_header(struct oauth_request *req, int kind)
+{
+	GHashTable *params = format_request_params(req, kind);
+	if(params == NULL) return NULL;
+
+	GString *str = g_string_sized_new(1024);
+	g_string_append(str, "OAuth ");
+	GHashTableIter iter;
+	g_hash_table_iter_init(&iter, params);
+	gpointer key, value;
+	bool first = true;
+	while(g_hash_table_iter_next(&iter, &key, &value)) {
+		if(first) first = false; else g_string_append(str, ", ");
+		char *e_key = oauth_url_escape(key),
+			*e_val = oauth_url_escape(value);
+		g_string_append_printf(str, "%s=\"%s\"", e_key, e_val);
+		g_free(e_key);
+		g_free(e_val);
+	}
+
+	g_hash_table_destroy(params);
+	char *ret = copy(req, str->str);
+	g_string_free(str, TRUE);
+	return ret;
+}
+
+
+GHashTable *oa_request_token_params(struct oauth_request *req)
+{
+	return format_request_params(req, OA_REQ_REQUEST_TOKEN);
+}
+
+
+char *oa_request_params_to_post_body(struct oauth_request *req, int kind)
+{
+	GHashTable *params = format_request_params(req, kind);
+	if(params == NULL) return NULL;
+
+	GString *str = g_string_sized_new(256);
+	GHashTableIter iter;
+	g_hash_table_iter_init(&iter, params);
+	gpointer k, v;
+	bool first = true;
+	while(g_hash_table_iter_next(&iter, &k, &v)) {
+		assert(k != NULL);
+		assert(v != NULL);
+		if(first) first = false; else g_string_append_c(str, '&');
+		char *ek = oauth_url_escape(k), *ev = oauth_url_escape(v);
+		g_string_append_printf(str, "%s=%s", ek, ev);
+		g_free(ek);
+		g_free(ev);
+	}
+
+	g_hash_table_destroy(params);
+	char *ret = copy(req, str->str);
+	g_string_free(str, TRUE);
+	return ret;
 }

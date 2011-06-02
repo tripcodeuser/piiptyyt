@@ -24,7 +24,11 @@ extern void state_free(struct piiptyyt_state *state);
 
 /* from login.c */
 
-extern char *oauth_login_classic(const char *username, const char *password);
+extern bool oauth_login_classic(
+	char **token_p,
+	char **token_secret_p,
+	const char *username,
+	const char *password);
 
 
 /* from oauth.c */
@@ -52,6 +56,11 @@ extern struct oauth_request *oa_req_new_with_params(
 	int sig_method,
 	const char *callback_url);
 extern bool oa_sign_request(struct oauth_request *req, int kind);
+extern const char *oa_auth_header(struct oauth_request *req, int kind);
+extern GHashTable *oa_request_token_params(struct oauth_request *req);
+extern char *oa_request_params_to_post_body(
+	struct oauth_request *req,
+	int kind);
 
 
 #endif

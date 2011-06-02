@@ -4,6 +4,7 @@
 #include <errno.h>
 #include <gtk/gtk.h>
 #include <glib.h>
+#include <gcrypt.h>
 
 #include "defs.h"
 
@@ -116,6 +117,13 @@ int main(int argc, char *argv[])
 {
 	g_thread_init(NULL);
 	gtk_init(&argc, &argv);
+
+	if(!gcry_check_version(GCRYPT_VERSION)) {
+		fprintf(stderr, "libgcrypt version mismatch!\n");
+		return EXIT_FAILURE;
+	}
+	gcry_control(GCRYCTL_INITIALIZATION_FINISHED, 0);
+
 	GtkBuilder *b = load_ui();
 
 	/* FIXME: error checks */
@@ -135,9 +143,19 @@ int main(int argc, char *argv[])
 			fprintf(stderr, "please stick auth info in ~/.config/piiptyyt/config .\n");
 			return EXIT_FAILURE;
 		}
-		char *token = oauth_login_classic(twitter_username, twitter_password);
-		printf("token is `%s'\n", token);
-		free(token);
+		/* TODO: perform actual login, return genuine auth bits... instead of
+		 * an unauthorized token and its secret.
+		 */
+		char *token = NULL, *token_secret = NULL;
+		if(oauth_login_classic(&token, &token_secret, 
+			twitter_username, twitter_password))
+		{
+			printf("token is `%s', secret is `%s'\n", token, token_secret);
+			g_free(token);
+			g_free(token_secret);
+		} else {
+			printf("login failed.\n");
+		}
 	}
 
 	if(twitter_password != NULL) {
