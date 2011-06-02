@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdint.h>
+#include <stdarg.h>
 #include <assert.h>
 #include <errno.h>
 #include <fcntl.h>
@@ -411,4 +412,43 @@ char *oa_request_params_to_post_body(struct oauth_request *req, int kind)
 	char *ret = copy(req, str->str);
 	g_string_free(str, TRUE);
 	return ret;
+}
+
+
+#define MAX_FIELDS 64
+
+char **oa_parse_response(const char *body, ...)
+{
+	va_list al;
+	va_start(al, body);
+	const char *fields[MAX_FIELDS];
+	int num_fields = 0;
+	do {
+		fields[num_fields++] = va_arg(al, const char *);
+	} while(fields[num_fields - 1] != NULL && num_fields < MAX_FIELDS);
+	num_fields--;
+	va_end(al);
+
+	char **pieces = g_strsplit(body, "&", 0);
+	char **output = g_new0(char *, num_fields + 1);
+	for(int i=0; pieces[i] != NULL; i++) {
+		char *eq = strchr(pieces[i], '=');
+		if(eq == NULL) {
+			fprintf(stderr, "%s: warning: unknown response component `%s'\n",
+				__func__, pieces[i]);
+			continue;
+		}
+		*(eq++) = '\0';
+
+		for(int j=0; j<num_fields; j++) {
+			if(strcmp(fields[j], pieces[i]) == 0) {
+				g_free(output[j]);
+				output[j] = g_strdup(eq);
+				break;
+			}
+		}
+	}
+	g_strfreev(pieces);
+
+	return output;
 }

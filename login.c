@@ -1,6 +1,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdbool.h>
 #include <string.h>
 #include <assert.h>
 #include <errno.h>
@@ -111,39 +112,28 @@ bool oauth_login(
 		fprintf(stderr, "%s: server returned status %d (%s)\n", __func__,
 			msg->status_code, soup_status_get_phrase(msg->status_code));
 		ok = false;
+		goto end;
 	} else {
 		/* interpret the response. */
-		const char *resp = msg->response_body->data;
-		char **pieces = g_strsplit(resp, "&", 0);
-		for(int i=0; pieces[i] != NULL; i++) {
-			char *eq = strchr(pieces[i], '=');
-			if(eq == NULL) {
-				fprintf(stderr, "%s: warning: unknown response component `%s'\n",
-					__func__, pieces[i]);
-				continue;
-			}
-			*(eq++) = '\0';
-			if(strcmp(pieces[i], "oauth_token") == 0) {
-				*auth_token_p = g_strdup(eq);
-			} else if(strcmp(pieces[i], "oauth_token_secret") == 0) {
-				*auth_secret_p = g_strdup(eq);
-			} else if(strcmp(pieces[i], "oauth_callback_confirmed") == 0) {
-				/* ignoring callback confirmation, since this is a desktop
-				 * client and won't have a publicly visible endpoint.
-				 */
-			} else {
-				fprintf(stderr, "%s: warning: unknown response field `%s'\n",
-					__func__, pieces[i]);
-				continue;
-			}
+		char **output = oa_parse_response(msg->response_body->data,
+			"oauth_token", "oauth_token_secret", NULL);
+		if(output == NULL) {
+			g_set_error(err_p, 0, EINVAL, "can't parse response data");
+			ok = false;
+			goto end;
 		}
-		g_strfreev(pieces);
-		ok = true;
-	}
-	g_object_unref(msg);
 
+		printf("token `%s', secret `%s'\n", output[0], output[1]);
+		g_strfreev(output);
+	}
+
+end:
+	g_object_unref(msg);
 	g_object_unref(ss);
 
-	g_set_error(err_p, 0, ENOSYS, "incomplete");
-	return false;
+	ok = false;
+	if(err_p != NULL && *err_p == NULL) {
+		g_set_error(err_p, 0, ENOSYS, "incomplete");
+	}
+	return ok;
 }

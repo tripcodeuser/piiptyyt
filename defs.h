@@ -67,6 +67,8 @@ extern GHashTable *oa_request_token_params(struct oauth_request *req);
 extern char *oa_request_params_to_post_body(
 	struct oauth_request *req,
 	int kind);
+extern char **oa_parse_response(const char *body, ...)
+	G_GNUC_NULL_TERMINATED;
 
 
 #endif
