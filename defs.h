@@ -46,9 +46,12 @@ extern bool oauth_login(
 
 /* from oauth.c */
 
+#define OA_POST_MIME_TYPE "application/x-www-form-urlencoded"
+
 #define SIG_HMAC_SHA1 1
 
 #define OA_REQ_REQUEST_TOKEN 0
+#define OA_REQ_ACCESS_TOKEN 1
 
 struct oauth_request
 {
@@ -56,6 +59,7 @@ struct oauth_request
 	char *consumer_key, *consumer_secret;
 	char *token_key, *token_secret;
 	char *request_url, *request_method;
+	char *verifier;
 	int sig_method;
 	char *timestamp, *nonce, *callback_url;
 	char *signature;
@@ -68,6 +72,11 @@ extern struct oauth_request *oa_req_new_with_params(
 	const char *request_url, const char *request_method,
 	int sig_method,
 	const char *callback_url);
+extern void oa_set_token(
+	struct oauth_request *req,
+	const char *token,
+	const char *secret);
+extern void oa_set_verifier(struct oauth_request *req, const char *verifier);
 extern bool oa_sign_request(struct oauth_request *req, int kind);
 extern const char *oa_auth_header(struct oauth_request *req, int kind);
 extern GHashTable *oa_request_token_params(struct oauth_request *req);

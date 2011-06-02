@@ -61,6 +61,22 @@ struct oauth_request *oa_req_new_with_params(
 }
 
 
+void oa_set_token(
+	struct oauth_request *req,
+	const char *token,
+	const char *secret)
+{
+	req->token_key = copy(req, token);
+	req->token_secret = copy(req, secret);
+}
+
+
+void oa_set_verifier(struct oauth_request *req, const char *verifier)
+{
+	req->verifier = copy(req, verifier);
+}
+
+
 /* oauth_url_escape() and the base64 functions are originally from liboauth
  * 0.9.4, which was licensed under MIT-style conditions. these are compatible
  * with piiptyyt's GPLv3+ terms.
@@ -185,7 +201,7 @@ static char *oa_sig_base(
 	}
 	keys = g_list_sort(keys, (GCompareFunc)&strcmp);
 
-	GString *str = g_string_sized_new(1024);
+	GString *str = g_string_sized_new(512);
 	g_string_append_printf(str, "%s&", method);
 	char *e_uri = oauth_url_escape(uri);
 	g_string_append_printf(str, "%s&", e_uri);
@@ -267,14 +283,24 @@ static GHashTable *gather_params(struct oauth_request *req, int kind)
 
 	if(req->consumer_key == NULL) return NULL;
 
+	GHashTable *params = g_hash_table_new(&g_str_hash, &g_str_equal);
 	switch(kind) {
 	case OA_REQ_REQUEST_TOKEN:
+		g_hash_table_insert(params, "oauth_callback",
+			req->callback_url != NULL ? req->callback_url : "");
 		break;
+
+	case OA_REQ_ACCESS_TOKEN:
+		if(req->verifier == NULL) req->verifier = copy(req, "");
+		g_hash_table_insert(params, "oauth_verifier", req->verifier);
+		g_hash_table_insert(params, "oauth_token", req->token_key);
+		break;
+
 	default:
+		g_hash_table_destroy(params);
 		return NULL;
 	}
 
-	GHashTable *params = g_hash_table_new(&g_str_hash, &g_str_equal);
 	g_hash_table_insert(params, "oauth_version", "1.0");
 	g_hash_table_insert(params, "oauth_consumer_key", req->consumer_key);
 	g_hash_table_insert(params, "oauth_signature_method",
@@ -293,8 +319,6 @@ static GHashTable *gather_params(struct oauth_request *req, int kind)
 		g_free(nonce);
 	}
 	g_hash_table_insert(params, "oauth_nonce", req->nonce);
-	g_hash_table_insert(params, "oauth_callback",
-		req->callback_url != NULL ? req->callback_url : "");
 
 	return params;
 }
