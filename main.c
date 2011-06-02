@@ -95,7 +95,7 @@ static void inject_test_data(GObject *model_obj)
 		gtk_list_store_append(store, &iter);
 		gtk_list_store_set(store, &iter,
 			0, g_object_ref(G_OBJECT(av)),
-			1, g_strdup(things[i]),
+			1, things[i],
 			-1);
 	}
 
