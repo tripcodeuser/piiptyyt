@@ -14,6 +14,8 @@
 
 #include "defs.h"
 
+#define DEBUG_PRINT 0
+
 
 static const char *sig_method_str[] = {
 	[SIG_HMAC_SHA1] = "HMAC-SHA1",
@@ -330,6 +332,9 @@ bool oa_sign_request(struct oauth_request *req, int kind)
 	if(params == NULL) return false;
 
 	char *sb = oa_sig_base(req->request_method, req->request_url, params);
+#if DEBUG_PRINT
+	printf("sigbase: `%s'\n", sb);
+#endif
 
 	char *signature;
 	switch(req->sig_method) {
@@ -338,6 +343,10 @@ bool oa_sign_request(struct oauth_request *req, int kind)
 			*tok_sec = oauth_url_escape(req->token_secret),
 			*hmac_key = g_strdup_printf("%s&%s", con_sec, tok_sec);
 		signature = oa_sign_sha1(sb, 0, hmac_key);
+#if DEBUG_PRINT
+		printf("hmac key: `%s'\n", hmac_key);
+		printf("signature: `%s'\n", signature);
+#endif
 		g_free(con_sec);
 		g_free(tok_sec);
 		g_free(hmac_key);
