@@ -125,23 +125,24 @@ struct piiptyyt_state *state_read(GError **err_p)
 		if(err->code != ENOENT) {
 			g_propagate_error(err_p, err);
 			return NULL;
+		} else {
+			g_error_free(err);
+			contents = g_strdup("");
 		}
-		g_error_free(err);
-		contents = g_strdup("");
 	}
 
+	struct piiptyyt_state *st = NULL;
 	GKeyFile *kf = g_key_file_new();
-	if(!g_key_file_load_from_data(kf, contents, length, 0, err_p)) {
-		g_key_file_free(kf);
-		return NULL;
+	gboolean ok = g_key_file_load_from_data(kf, contents, length, 0, err_p);
+	if(ok) {
+		st = g_new(struct piiptyyt_state, 1);
+		st->username = g_key_file_get_string(kf, "auth", "username", NULL);
+		st->auth_token = g_key_file_get_string(kf, "auth", "auth_token", NULL);
+		st->auth_secret = g_key_file_get_string(kf, "auth", "auth_secret", NULL);
+		st->userid = g_key_file_get_uint64(kf, "auth", "userid", NULL);
 	}
-
-	struct piiptyyt_state *st = g_new(struct piiptyyt_state, 1);
-	st->username = g_key_file_get_string(kf, "auth", "username", NULL);
-	st->auth_token = g_key_file_get_string(kf, "auth", "auth_token", NULL);
-	st->auth_secret = g_key_file_get_string(kf, "auth", "auth_secret", NULL);
-	st->userid = g_key_file_get_uint64(kf, "auth", "userid", NULL);
 	g_key_file_free(kf);
+	g_free(contents);
 
 	return st;
 }
