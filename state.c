@@ -108,6 +108,7 @@ bool state_write(const struct piiptyyt_state *st, GError **err_p)
 		} else {
 			ret = true;
 		}
+		g_free(contents);
 	}
 
 	close(fd);
