@@ -1,0 +1,3 @@
+This directory contains a test program for receiving OAuth requests and
+verifying their signatures using the presumably-good Net::OAuth implementation
+from CPAN.
