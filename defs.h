@@ -57,10 +57,12 @@ extern bool oauth_login(
 
 #define OA_REQ_REQUEST_TOKEN 0
 #define OA_REQ_ACCESS_TOKEN 1
+#define OA_REQ_RESOURCE 2
 
 struct oauth_request
 {
 	GStringChunk *strs;
+	GHashTable *extra_params;
 	char *consumer_key, *consumer_secret;
 	char *token_key, *token_secret;
 	char *request_url, *request_method;
@@ -82,9 +84,13 @@ extern void oa_set_token(
 	const char *token,
 	const char *secret);
 extern void oa_set_verifier(struct oauth_request *req, const char *verifier);
+extern void oa_set_extra_param(
+	struct oauth_request *req,
+	const char *key,
+	const char *value);
 extern bool oa_sign_request(struct oauth_request *req, int kind);
 extern const char *oa_auth_header(struct oauth_request *req, int kind);
-extern GHashTable *oa_request_token_params(struct oauth_request *req);
+extern GHashTable *oa_request_params(struct oauth_request *req, int kind);
 extern char *oa_request_params_to_post_body(
 	struct oauth_request *req,
 	int kind);

@@ -5,6 +5,7 @@
 #include <gtk/gtk.h>
 #include <glib.h>
 #include <gcrypt.h>
+#include <libsoup/soup.h>
 
 #include "defs.h"
 
@@ -109,6 +110,42 @@ static gboolean main_wnd_delete(GtkWidget *obj, GdkEvent *ev, void *data) {
 }
 
 
+/* FIXME: move this into twitterapi.c or some such */
+SoupMessage *make_resource_request_msg(
+	const char *uri,
+	struct piiptyyt_state *state,
+	...)
+{
+	struct oauth_request *oa = oa_req_new_with_params(
+		CONSUMER_KEY, CONSUMER_SECRET, uri, "GET", SIG_HMAC_SHA1, NULL);
+	oa_set_token(oa, state->auth_token, state->auth_secret);
+
+	va_list al;
+	va_start(al, state);
+	for(;;) {
+		const char *key = va_arg(al, const char *);
+		if(key == NULL) break;
+		const char *value = va_arg(al, const char *);
+		oa_set_extra_param(oa, key, value);
+	}
+	va_end(al);
+
+	if(!oa_sign_request(oa, OA_REQ_RESOURCE)) {
+		/* FIXME */
+		oa_req_free(oa);
+		return NULL;
+	}
+
+	SoupMessage *msg = soup_message_new("GET", uri);
+	GHashTable *query = oa_request_params(oa, OA_REQ_RESOURCE);
+	soup_uri_set_query_from_form(soup_message_get_uri(msg), query);
+	g_hash_table_destroy(query);
+
+	oa_req_free(oa);
+	return msg;
+}
+
+
 int main(int argc, char *argv[])
 {
 	g_thread_init(NULL);
@@ -166,6 +203,22 @@ int main(int argc, char *argv[])
 
 	g_object_unref(G_OBJECT(b));
 	b = NULL;
+
+	/* experimental: fetch 20 most recent twates, parse them, output something
+	 * about them.
+	 */
+	const char *status_uri = "https://api.twitter.com/1/statuses/home_timeline.json";
+	SoupSession *ss = soup_session_async_new();
+	SoupMessage *msg = make_resource_request_msg(status_uri, state, NULL);
+	soup_session_send_message(ss, msg);
+	if(msg->status_code != SOUP_STATUS_OK) {
+		fprintf(stderr, "could not get twet: %d %s\n", msg->status_code,
+			soup_status_get_phrase(msg->status_code));
+	} else {
+		printf("home_timeline output:\n%s\n", msg->response_body->data);
+	}
+	g_object_unref(msg);
+	g_object_unref(ss);
 
 	gtk_main();
 

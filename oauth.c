@@ -31,6 +31,7 @@ static char *copy(struct oauth_request *req, const char *str)
 
 void oa_req_free(struct oauth_request *req)
 {
+	g_hash_table_destroy(req->extra_params);
 	g_string_chunk_free(req->strs);
 	g_free(req);
 }
@@ -40,6 +41,7 @@ struct oauth_request *oa_req_new(void)
 {
 	struct oauth_request *req = g_new0(struct oauth_request, 1);
 	req->strs = g_string_chunk_new(512);
+	req->extra_params = g_hash_table_new(&g_str_hash, &g_str_equal);
 
 	return req;
 }
@@ -76,6 +78,19 @@ void oa_set_token(
 void oa_set_verifier(struct oauth_request *req, const char *verifier)
 {
 	req->verifier = copy(req, verifier);
+}
+
+
+void oa_set_extra_param(
+	struct oauth_request *req,
+	const char *key,
+	const char *value)
+{
+	if(g_hash_table_lookup(req->extra_params, key) != NULL) {
+		g_hash_table_remove(req->extra_params, key);
+	}
+	g_hash_table_insert(req->extra_params,
+		copy(req, key), copy(req, value));
 }
 
 
@@ -298,6 +313,17 @@ static GHashTable *gather_params(struct oauth_request *req, int kind)
 		g_hash_table_insert(params, "oauth_token", req->token_key);
 		break;
 
+	case OA_REQ_RESOURCE: {
+		g_hash_table_insert(params, "oauth_token", req->token_key);
+		GHashTableIter iter;
+		g_hash_table_iter_init(&iter, req->extra_params);
+		gpointer k, v;
+		while(g_hash_table_iter_next(&iter, &k, &v)) {
+			g_hash_table_insert(params, k, v);
+		}
+		break;
+		}
+
 	default:
 		g_hash_table_destroy(params);
 		return NULL;
@@ -370,7 +396,7 @@ bool oa_sign_request(struct oauth_request *req, int kind)
 /* gather parameters, remove secrets, insert signature. common path for the
  * other parameter-consuming functions.
  */
-static GHashTable *format_request_params(struct oauth_request *req, int kind)
+GHashTable *oa_request_params(struct oauth_request *req, int kind)
 {
 	if(req->signature == NULL) return NULL;
 
@@ -390,7 +416,7 @@ static GHashTable *format_request_params(struct oauth_request *req, int kind)
 
 const char *oa_auth_header(struct oauth_request *req, int kind)
 {
-	GHashTable *params = format_request_params(req, kind);
+	GHashTable *params = oa_request_params(req, kind);
 	if(params == NULL) return NULL;
 
 	GString *str = g_string_sized_new(1024);
@@ -415,15 +441,9 @@ const char *oa_auth_header(struct oauth_request *req, int kind)
 }
 
 
-GHashTable *oa_request_token_params(struct oauth_request *req)
-{
-	return format_request_params(req, OA_REQ_REQUEST_TOKEN);
-}
-
-
 char *oa_request_params_to_post_body(struct oauth_request *req, int kind)
 {
-	GHashTable *params = format_request_params(req, kind);
+	GHashTable *params = oa_request_params(req, kind);
 	if(params == NULL) return NULL;
 
 	GString *str = g_string_sized_new(256);
