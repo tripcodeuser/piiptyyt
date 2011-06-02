@@ -29,30 +29,6 @@ struct pin_ctx
 };
 
 
-static char *read_consumer_key(GError **err_p)
-{
-	char *path = g_build_filename(g_get_home_dir(),
-		"api.twitter.com__consumer_key", NULL);
-	char *key = NULL;
-	gboolean ok = g_file_get_contents(path, &key, NULL, err_p);
-	g_free(path);
-	if(ok) g_strchomp(key);
-	return key;
-}
-
-
-static char *read_consumer_secret(GError **err_p)
-{
-	char *path = g_build_filename(g_get_home_dir(),
-		"api.twitter.com__consumer_secret", NULL);
-	char *key = NULL;
-	gboolean ok = g_file_get_contents(path, &key, NULL, err_p);
-	g_free(path);
-	if(ok) g_strchomp(key);
-	return key;
-}
-
-
 static SoupMessage *make_token_request_msg(
 	const char *token_uri,
 	const char *consumer_key,
@@ -201,25 +177,6 @@ bool oauth_login(
 	uint64_t *userid_p,
 	GError **err_p)
 {
-	GError *err = NULL;
-
-	/* TODO: replace these with constants */
-	char *consumer_key = read_consumer_key(&err);
-	if(consumer_key == NULL) {
-		fprintf(stderr, "%s: failed (%s [code %d])\n", __func__,
-			err->message, err->code);
-		g_error_free(err);
-		return false;
-	}
-	char *consumer_secret = read_consumer_secret(&err);
-	if(consumer_secret == NULL) {
-		fprintf(stderr, "%s: failed (%s [code %d])\n", __func__,
-			err->message, err->code);
-		g_error_free(err);
-		g_free(consumer_key);
-		return false;
-	}
-
 #if !USE_LOCAL_CGI
 	const char *token_uri = "https://api.twitter.com/oauth/request_token";
 	const char *access_uri = "https://api.twitter.com/oauth/access_token";
@@ -235,8 +192,8 @@ bool oauth_login(
 	g_object_unref(logger);
 #endif
 
-	SoupMessage *msg = make_token_request_msg(token_uri, consumer_key,
-		consumer_secret);
+	SoupMessage *msg = make_token_request_msg(token_uri, CONSUMER_KEY,
+		CONSUMER_SECRET);
 	if(msg == NULL) {
 		/* FIXME */
 		abort();
@@ -275,7 +232,7 @@ bool oauth_login(
 	/* get an access token */
 	g_object_unref(msg);
 	msg = make_access_token_request_msg(access_uri, req_token, req_secret,
-		pin, consumer_key, consumer_secret);
+		pin, CONSUMER_KEY, CONSUMER_SECRET);
 	g_free(pin);
 	if(msg == NULL) {
 		fprintf(stderr, "can't sign access request message!\n");

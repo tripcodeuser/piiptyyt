@@ -8,6 +8,11 @@
 #include <gtk/gtk.h>
 
 
+/* app-wide consumer key, consumer secret. */
+#define CONSUMER_KEY "Q61Cbri9yBndDmUFaqz37g"
+#define CONSUMER_SECRET "7j4YTFcT9a0rWLPKLpQMwwGeJK40yiHUb5JlzVVvjs4"
+
+
 /* persistent, named client state. */
 struct piiptyyt_state
 {
