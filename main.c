@@ -147,7 +147,7 @@ int main(int argc, char *argv[])
 	g_object_unref(G_OBJECT(b));
 	b = NULL;
 
-	while(state->auth_token == NULL || state->auth_token[0] == '\0') {
+	if(state->auth_token == NULL || state->auth_token[0] == '\0') {
 		char *username, *token, *secret;
 		uint64_t userid;
 		GError *err = NULL;
@@ -162,6 +162,8 @@ int main(int argc, char *argv[])
 		} else {
 			printf("login failed: %s (code %d).\n", err->message, err->code);
 			g_error_free(err);
+			/* FIXME: have a retry policy. */
+			return EXIT_FAILURE;
 		}
 	}
 

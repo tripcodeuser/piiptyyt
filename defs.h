@@ -34,7 +34,7 @@ extern bool oauth_login(
 	char **auth_token_p,
 	char **auth_secret_p,
 	uint64_t *userid_p,
-	GError *err_p);
+	GError **err_p);
 
 
 /* from oauth.c */

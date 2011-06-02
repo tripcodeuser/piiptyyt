@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <assert.h>
+#include <errno.h>
 #include <libsoup/soup.h>
 
 #include "defs.h"
@@ -32,12 +33,45 @@ static char *read_consumer_secret(GError **err_p)
 }
 
 
+static SoupMessage *make_token_request_msg(
+	const char *token_uri,
+	const char *consumer_key,
+	const char *consumer_secret)
+{
+	struct oauth_request *oa = oa_req_new_with_params(
+		consumer_key, consumer_secret, token_uri, "POST", SIG_HMAC_SHA1, NULL);
+	if(!oa_sign_request(oa, OA_REQ_REQUEST_TOKEN)) {
+		/* FIXME: handle! */
+		printf("fail!\n");
+		oa_req_free(oa);
+		return NULL;
+	}
+
+	SoupMessage *msg = soup_message_new("POST", token_uri);
+#if 0
+	soup_message_headers_append(msg->request_headers,
+		"Authorization", oa_auth_header(oa, OA_REQ_REQUEST_TOKEN));
+#elif 1
+	char *body = oa_request_params_to_post_body(oa, OA_REQ_REQUEST_TOKEN);
+	soup_message_set_request(msg, "application/x-www-form-urlencoded",
+		SOUP_MEMORY_COPY, body, strlen(body));
+#else
+	GHashTable *query = oa_request_token_params(oa);
+	soup_uri_set_query_from_form(soup_message_get_uri(msg), query);
+	g_hash_table_destroy(query);
+#endif
+
+	oa_req_free(oa);
+	return msg;
+}
+
+
 bool oauth_login(
 	char **username_p,
 	char **auth_token_p,
 	char **auth_secret_p,
 	uint64_t *userid_p,
-	GError *err_p)
+	GError **err_p)
 {
 	GError *err = NULL;
 
@@ -58,18 +92,10 @@ bool oauth_login(
 		return false;
 	}
 
-	const char *token_uri = "https://api.twitter.com/oauth/request_token";
-//	const char *token_uri = "https://localhost/cgi-bin/oauth.cgi/request_token";
-	struct oauth_request *oa = oa_req_new_with_params(
-		consumer_key, consumer_secret, token_uri, "POST", SIG_HMAC_SHA1, NULL);
-	g_free(consumer_secret);
-	if(!oa_sign_request(oa, OA_REQ_REQUEST_TOKEN)) {
-		/* FIXME: handle! */
-		printf("fail!\n");
-		assert(false);
-	}
+//	const char *token_uri = "https://api.twitter.com/oauth/request_token";
+	const char *token_uri = "https://localhost/cgi-bin/oauth.cgi/request_token";
 
-	/* for the moment, synchronous operation. this should dip back into the
+	/* for the moment, synchronous operation. this should dip down into the
 	 * glib main loop at some point, though.
 	 */
 	SoupSession *ss = soup_session_sync_new();
@@ -79,20 +105,11 @@ bool oauth_login(
 	g_object_unref(logger);
 #endif
 
-	SoupMessage *msg = soup_message_new("POST", token_uri);
-#if 0
-	soup_message_headers_append(msg->request_headers,
-		"Authorization", oa_auth_header(oa, OA_REQ_REQUEST_TOKEN));
-#elif 1
-	char *body = oa_request_params_to_post_body(oa, OA_REQ_REQUEST_TOKEN);
-	soup_message_set_request(msg, "application/x-www-form-urlencoded",
-		SOUP_MEMORY_STATIC, body, strlen(body));
-#else
-	GHashTable *query = oa_request_token_params(oa);
-	soup_uri_set_query_from_form(soup_message_get_uri(msg), query);
-	g_hash_table_destroy(query);
-#endif
+	SoupMessage *msg = make_token_request_msg(token_uri, consumer_key,
+		consumer_secret);
+	printf("sending token request...\n");
 	soup_session_send_message(ss, msg);
+
 	bool ok;
 	if(msg->status_code != SOUP_STATUS_OK) {
 		fprintf(stderr, "%s: server returned status %d (%s)\n", __func__,
@@ -100,6 +117,7 @@ bool oauth_login(
 		ok = false;
 	} else {
 		/* interpret the response. */
+		printf("got token request response.\n");
 		const char *resp = msg->response_body->data;
 		char **pieces = g_strsplit(resp, "&", 0);
 		for(int i=0; pieces[i] != NULL; i++) {
@@ -129,8 +147,8 @@ bool oauth_login(
 	}
 	g_object_unref(msg);
 
-	oa_req_free(oa);
 	g_object_unref(ss);
 
-	return true;
+	g_set_error(err_p, 0, ENOSYS, "incomplete");
+	return false;
 }
