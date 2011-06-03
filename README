@@ -12,3 +12,4 @@ the usual C compilers and linkers etc.):
   - libsoup2.4-dev
   - libgcrypt-dev
   - libgnutls-dev
+  - libjson-glib-dev
