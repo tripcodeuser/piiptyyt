@@ -6,6 +6,7 @@
 #include <stdbool.h>
 #include <glib.h>
 #include <gtk/gtk.h>
+#include <json-glib/json-glib.h>
 
 
 /* app-wide consumer key, consumer secret. */
@@ -22,9 +23,35 @@ struct piiptyyt_state
 };
 
 
+/* the almighty "update", also known as a "tweet" or "status".
+ *
+ * this structure is a candidate for making into a GObject, for things such as
+ * early display of updates that're in reply to uids or sids that the client
+ * doesn't remember; a signal would be popped once the contents have settled
+ * due to a http transaction completing or data coming down the wire.
+ */
+struct update
+{
+	uint64_t id;			/* status id on the microblog service. */
+	bool favorited, truncated;
+	uint64_t in_rep_to_uid;	/* 0 when not a reply */
+	uint64_t in_rep_to_sid;	/* status id, or -''- */
+	char *in_rep_to_screen_name;
+	char *source;	/* "web", "piiptyyt", etc (should be a local source id) */
+	char *text;				/* UTF-8 */
+};
+
+
 /* from main.c */
 
 extern GObject *ui_object(GtkBuilder *b, const char *id);
+
+
+/* from update.c */
+
+extern struct update *update_new(void);
+extern void update_free(struct update *u);
+extern struct update *update_new_from_json(JsonObject *obj, GError **err_p);
 
 
 /* from state.c */

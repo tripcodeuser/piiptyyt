@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <errno.h>
+#include <assert.h>
 #include <gtk/gtk.h>
 #include <glib.h>
 #include <gcrypt.h>
@@ -146,6 +147,49 @@ SoupMessage *make_resource_request_msg(
 }
 
 
+/* returned GPtrArray has a null-safe free-function for convenience. */
+static GPtrArray *parse_update_array(
+	const void *data,
+	size_t length,
+	GError **err_p)
+{
+	JsonParser *parser = json_parser_new();
+	gboolean ok = json_parser_load_from_data(parser, data, length, err_p);
+	if(!ok) {
+		g_object_unref(parser);
+		return NULL;
+	}
+
+	/* FIXME: add checks under each "get" call, since this data comes from an
+	 * untrusted source.
+	 */
+	JsonArray *list = json_node_get_array(
+		json_parser_get_root(parser));
+	GList *contents = json_array_get_elements(list);
+	GPtrArray *updates = g_ptr_array_new_with_free_func(
+		(GDestroyNotify)&update_free);
+	for(GList *cur = g_list_first(contents);
+		cur != NULL;
+		cur = g_list_next(cur))
+	{
+		struct update *u = update_new_from_json(
+			json_node_get_object(cur->data), err_p);
+		if(u == NULL) {
+			g_ptr_array_free(updates, TRUE);
+			updates = NULL;
+			break;
+		}
+
+		g_ptr_array_add(updates, u);
+	}
+
+	g_list_free(contents);
+	g_object_unref(parser);
+
+	return updates;
+}
+
+
 int main(int argc, char *argv[])
 {
 	g_thread_init(NULL);
@@ -215,7 +259,21 @@ int main(int argc, char *argv[])
 		fprintf(stderr, "could not get twet: %d %s\n", msg->status_code,
 			soup_status_get_phrase(msg->status_code));
 	} else {
-		printf("home_timeline output:\n%s\n", msg->response_body->data);
+		GError *err = NULL;
+		GPtrArray *updates = parse_update_array(msg->response_body->data,
+			msg->response_body->length, &err);
+		if(updates == NULL) {
+			fprintf(stderr, "can't parse updates: %s\n", err->message);
+			g_error_free(err);
+		} else {
+			for(int i=0; i < updates->len; i++) {
+				struct update *u = g_ptr_array_index(updates, i);
+				printf("update %llu: `%s' (via `%s')\n",
+					(unsigned long long)u->id,
+					u->text, u->source);
+			}
+			g_ptr_array_free(updates, TRUE);
+		}
 	}
 	g_object_unref(msg);
 	g_object_unref(ss);
