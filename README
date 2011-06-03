@@ -13,3 +13,4 @@ the usual C compilers and linkers etc.):
   - libgcrypt-dev
   - libgnutls-dev
   - libjson-glib-dev
+  - libsqlite3-dev

@@ -215,6 +215,13 @@ int main(int argc, char *argv[])
 		return EXIT_FAILURE;
 	}
 
+	/* FIXME: stick this in a global somewhere */
+	struct user_cache *uc = user_cache_open();
+	if(uc == NULL) {
+		fprintf(stderr, "can't open user cache!\n");
+		return EXIT_FAILURE;
+	}
+
 	GObject *tweet_model = ui_object(b, "tweet_model");
 	inject_test_data(tweet_model);
 
@@ -283,6 +290,8 @@ int main(int argc, char *argv[])
 	/* TODO: check errors etc */
 	state_write(state, NULL);
 	state_free(state);
+
+	user_cache_close(uc);
 
 	return EXIT_SUCCESS;
 }

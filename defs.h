@@ -42,6 +42,13 @@ struct update
 };
 
 
+struct user_info
+{
+	uint64_t id;
+	/* etc */
+};
+
+
 /* from main.c */
 
 extern GObject *ui_object(GtkBuilder *b, const char *id);
@@ -52,6 +59,14 @@ extern GObject *ui_object(GtkBuilder *b, const char *id);
 extern struct update *update_new(void);
 extern void update_free(struct update *u);
 extern struct update *update_new_from_json(JsonObject *obj, GError **err_p);
+
+
+/* from usercache.c */
+
+struct user_cache;
+
+extern struct user_cache *user_cache_open(void);
+extern void user_cache_close(struct user_cache *uc);
 
 
 /* from state.c */
