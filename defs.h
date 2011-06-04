@@ -24,6 +24,23 @@ struct piiptyyt_state
 };
 
 
+/* description of a field in a structure. types are
+ * 's' for string
+ * 'i' for int64_t
+ * 'b' for bool
+ * 't' for time_t, formatted as a standard UTC timestamp
+ */
+struct field_desc
+{
+	const char *name;	/* name in the external format */
+	off_t offset;		/* field offset */
+	char type;			/* see above */
+};
+
+#define FIELD(s, type, fieldname, name) { (name), offsetof(s, fieldname), (type) }
+#define FLD(s, type, name) FIELD(s, type, name, #name)
+
+
 /* the almighty "update", also known as a "tweet" or "status".
  *
  * this structure is a candidate for making into a GObject, for things such as
@@ -109,6 +126,18 @@ extern bool oauth_login(
 	char **auth_secret_p,
 	uint64_t *userid_p,
 	GError **err_p);
+
+
+/* from format.c */
+
+/* reads prior fields. existing strings are g_free()'d. returns whether a
+ * field was changed by input from the JSON object.
+ */
+extern bool format_from_json(
+	void *dest,
+	JsonObject *obj,
+	const struct field_desc *fields,
+	size_t num_fields);
 
 
 /* from oauth.c */

@@ -24,7 +24,7 @@ tags: $(wildcard *.[ch])
 	@ctags -R .
 
 
-piiptyyt: main.o state.o login.o oauth.o update.o usercache.o
+piiptyyt: main.o state.o login.o oauth.o update.o usercache.o format.o
 	$(CC) -o $@ $^ $(CFLAGS) $(LDFLAGS) $(LIBS)
 
 
@@ -36,3 +36,4 @@ login.o: login.c defs.h
 oauth.o: oauth.c defs.h
 update.o: update.c defs.h
 usercache.o: usercache.c defs.h
+format.o: format.c defs.h
