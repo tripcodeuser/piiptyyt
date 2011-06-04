@@ -4,6 +4,7 @@
 
 #include <stdint.h>
 #include <stdbool.h>
+#include <sys/time.h>
 #include <glib.h>
 #include <gtk/gtk.h>
 #include <json-glib/json-glib.h>
@@ -42,10 +43,24 @@ struct update
 };
 
 
+struct user_cache;
+
+/* an empty user_info occurs when the client has only seen a trimmed user JSON
+ * object. those can be recognized by ->screenname == NULL.
+ */
 struct user_info
 {
 	uint64_t id;
+	char *longname, *screenname;
+	char *profile_image_url;
+	char *cached_img_name;
+	time_t cached_img_expires;
+	bool protected, verified, following;
 	/* etc */
+
+	/* non-database, non-json fields */
+	struct user_cache *cache_parent;
+	bool dirty;		/* sync to database on destroy? */
 };
 
 
@@ -63,10 +78,15 @@ extern struct update *update_new_from_json(JsonObject *obj, GError **err_p);
 
 /* from usercache.c */
 
-struct user_cache;
-
 extern struct user_cache *user_cache_open(void);
 extern void user_cache_close(struct user_cache *uc);
+extern struct user_info *user_info_get(
+	struct user_cache *uc,
+	uint64_t id);
+extern struct user_info *user_info_get_from_json(
+	struct user_cache *uc,
+	JsonObject *userinfo_obj);
+extern void user_info_put(struct user_info *info);
 
 
 /* from state.c */

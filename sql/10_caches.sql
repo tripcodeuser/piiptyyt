@@ -5,10 +5,10 @@ CREATE TABLE cached_user_info (
 	id INTEGER PRIMARY KEY,
 	longname VARCHAR NOT NULL,
 	screenname VARCHAR UNIQUE NOT NULL,
-	created_at TIMESTAMP WITH TIME ZONE,
 	profile_image_url VARCHAR,
 	protected BOOLEAN NOT NULL,
 	verified BOOLEAN NOT NULL,
+	following BOOLEAN NOT NULL,
 
 	-- profile image caching
 	profile_image_name VARCHAR,
