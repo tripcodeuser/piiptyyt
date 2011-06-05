@@ -1,3 +1,7 @@
-This directory contains a test program for receiving OAuth requests and
+This directory contains utilities and such that are useful for piiptyyt
+development.
+
+Currently, this is just a test CGI program for receiving OAuth requests and
 verifying their signatures using the presumably-good Net::OAuth implementation
-from CPAN.
+from CPAN. It doesn't handle the mode where OAuth headers are sent in the
+Authorized header, as Apache2 doesn't pass that along.
