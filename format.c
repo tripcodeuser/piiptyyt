@@ -8,7 +8,7 @@
 #include "defs.h"
 
 
-/* FIXME: hunt for changes, free existing strings */
+/* FIXME: hunt for changes */
 bool format_from_json(
 	void *dest,
 	JsonObject *obj,
@@ -32,6 +32,7 @@ bool format_from_json(
 			*(bool *)ptr = json_object_get_boolean_member(obj, name) != FALSE;
 			break;
 		case 's':
+			g_free(*(char **)ptr);
 			*(char **)ptr = g_strdup(json_object_get_string_member(obj, name));
 			break;
 		}
