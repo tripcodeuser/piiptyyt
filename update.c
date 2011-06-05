@@ -32,6 +32,7 @@ void update_free(struct update *u)
 	if(u == NULL) return;
 
 	user_info_put(u->user);
+	/* FIXME: use a format_free() call to drop the strings */
 	g_free(u->in_rep_to_screen_name);
 	g_free(u->source);
 	g_free(u->text);

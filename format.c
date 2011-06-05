@@ -8,6 +8,7 @@
 #include "defs.h"
 
 
+/* FIXME: hunt for changes, free existing strings */
 bool format_from_json(
 	void *dest,
 	JsonObject *obj,

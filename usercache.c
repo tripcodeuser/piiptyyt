@@ -13,6 +13,13 @@
 #include "defs.h"
 
 
+/* this caching mechanism's replacement policy is far too eager considering
+ * that a single item falling to 0 references may cause a full disk sync at
+ * worst. a reference-counted LRU list with a high/low watermark policy would
+ * be more appropriate, and one should be designed and implemented before
+ * v1.0. it'll have two use cases in piiptyyt, the second being caching of
+ * actual updates.
+ */
 struct user_cache
 {
 	sqlite3 *db;
@@ -188,6 +195,7 @@ struct user_cache *user_cache_open(void)
 	{
 		if(!load_schema(c->db)) {
 			/* FIXME: propagate error */
+			g_error_free(err);
 			goto fail;
 		}
 	} else if(test_user != NULL) {
@@ -234,6 +242,9 @@ struct user_info *user_info_get(struct user_cache *c, uint64_t uid)
  * - if not present, parse from object
  * - otherwise, update it and set the dirty flag when the object's data
  *   differs from stored
+ *
+ * this function's purpose is a bit confused. the design isn't at all clean. i
+ * blame the pipeweed.
  */
 struct user_info *user_info_get_from_json(
 	struct user_cache *c,
