@@ -31,6 +31,7 @@ void update_free(struct update *u)
 {
 	if(u == NULL) return;
 
+	user_info_put(u->user);
 	g_free(u->in_rep_to_screen_name);
 	g_free(u->source);
 	g_free(u->text);
@@ -38,10 +39,20 @@ void update_free(struct update *u)
 }
 
 
-struct update *update_new_from_json(JsonObject *obj, GError **err_p)
+struct update *update_new_from_json(
+	JsonObject *obj,
+	struct user_cache *uc,
+	GError **err_p)
 {
 	struct update *u = update_new();
 	format_from_json(u, obj, update_fields, G_N_ELEMENTS(update_fields));
+
+	if(uc != NULL) {
+		JsonObject *user = json_object_get_object_member(obj, "user");
+		if(user != NULL) {
+			u->user = user_info_get_from_json(uc, user);
+		}
+	}
 
 	return u;
 }

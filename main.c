@@ -151,6 +151,7 @@ SoupMessage *make_resource_request_msg(
 static GPtrArray *parse_update_array(
 	const void *data,
 	size_t length,
+	struct user_cache *uc,
 	GError **err_p)
 {
 	JsonParser *parser = json_parser_new();
@@ -173,7 +174,7 @@ static GPtrArray *parse_update_array(
 		cur = g_list_next(cur))
 	{
 		struct update *u = update_new_from_json(
-			json_node_get_object(cur->data), err_p);
+			json_node_get_object(cur->data), uc, err_p);
 		if(u == NULL) {
 			g_ptr_array_free(updates, TRUE);
 			updates = NULL;
@@ -268,15 +269,19 @@ int main(int argc, char *argv[])
 	} else {
 		GError *err = NULL;
 		GPtrArray *updates = parse_update_array(msg->response_body->data,
-			msg->response_body->length, &err);
+			msg->response_body->length, uc, &err);
 		if(updates == NULL) {
 			fprintf(stderr, "can't parse updates: %s\n", err->message);
 			g_error_free(err);
 		} else {
 			for(int i=0; i < updates->len; i++) {
 				struct update *u = g_ptr_array_index(updates, i);
-				printf("update %llu: `%s' (via `%s')\n",
-					(unsigned long long)u->id,
+				const char *user = "(unknown)";
+				if(u->user != NULL && u->user->screenname != NULL) {
+					user = u->user->screenname;
+				}
+				printf("update %llu: %s: `%s' (via `%s')\n",
+					(unsigned long long)u->id, user,
 					u->text, u->source);
 			}
 			g_ptr_array_free(updates, TRUE);

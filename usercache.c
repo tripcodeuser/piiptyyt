@@ -20,6 +20,16 @@ struct user_cache
 };
 
 
+static const struct field_desc user_info_fields[] = {
+	FIELD(struct user_info, 's', longname, "name"),
+	FIELD(struct user_info, 's', screenname, "screen_name"),
+	FLD(struct user_info, 's', profile_image_url),
+	FLD(struct user_info, 'b', protected),
+	FLD(struct user_info, 'b', verified),
+	FLD(struct user_info, 'b', following),
+};
+
+
 /* used by functions serving user_info_cache */
 static struct user_cache *current_cache;
 
@@ -94,6 +104,9 @@ static gpointer user_info_fetch_or_new(gpointer keyptr)
 static void user_info_free(struct user_info *ui)
 {
 	if(ui == NULL) return;
+
+	fprintf(stderr, "would flush user info for %llu to database.\n",
+		(unsigned long long)ui->id);
 
 	g_free(ui->longname);
 	g_free(ui->screenname);
@@ -219,7 +232,8 @@ struct user_info *user_info_get(struct user_cache *c, uint64_t uid)
 
 /* fetch user info;
  * - if not present, parse from object
- * - otherwise, update it if the object's data is distinct
+ * - otherwise, update it and set the dirty flag when the object's data
+ *   differs from stored
  */
 struct user_info *user_info_get_from_json(
 	struct user_cache *c,
@@ -231,12 +245,10 @@ struct user_info *user_info_get_from_json(
 
 	current_cache = c;
 	struct user_info *ui = g_cache_insert(c->user_info_cache, key);
-	if(ui->screenname == NULL) {
-		/* FIXME: unpack the entire object */
-		ui->dirty = true;
-	} else {
-		/* FIXME: unpack the object, set dirty if changed */
-	}
+	bool bare = (ui->screenname == NULL);
+	bool changed = format_from_json(ui, obj, user_info_fields,
+		G_N_ELEMENTS(user_info_fields));
+	ui->dirty = ui->dirty || bare || changed;
 
 	return ui;
 }
@@ -244,6 +256,8 @@ struct user_info *user_info_get_from_json(
 
 void user_info_put(struct user_info *ui)
 {
+	if(ui == NULL) return;
+
 	current_cache = ui->cache_parent;
 	g_cache_remove(ui->cache_parent->user_info_cache, ui);
 }

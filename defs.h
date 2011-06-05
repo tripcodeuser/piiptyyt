@@ -41,6 +41,28 @@ struct field_desc
 #define FLD(s, type, name) FIELD(s, type, name, #name)
 
 
+struct user_cache;
+
+/* an empty user_info occurs when the client has only seen a trimmed user JSON
+ * object. those can be recognized by ->screenname == NULL.
+ */
+struct user_info
+{
+	uint64_t id;
+	char *longname, *screenname;
+	char *profile_image_url;
+	bool protected, verified, following;
+
+	/* not from JSON, but in database */
+	char *cached_img_name;
+	time_t cached_img_expires;
+
+	/* non-database, non-json fields */
+	struct user_cache *cache_parent;
+	bool dirty;		/* sync to database on destroy? */
+};
+
+
 /* the almighty "update", also known as a "tweet" or "status".
  *
  * this structure is a candidate for making into a GObject, for things such as
@@ -57,27 +79,8 @@ struct update
 	char *in_rep_to_screen_name;
 	char *source;	/* "web", "piiptyyt", etc (should be a local source id) */
 	char *text;				/* UTF-8 */
-};
 
-
-struct user_cache;
-
-/* an empty user_info occurs when the client has only seen a trimmed user JSON
- * object. those can be recognized by ->screenname == NULL.
- */
-struct user_info
-{
-	uint64_t id;
-	char *longname, *screenname;
-	char *profile_image_url;
-	char *cached_img_name;
-	time_t cached_img_expires;
-	bool protected, verified, following;
-	/* etc */
-
-	/* non-database, non-json fields */
-	struct user_cache *cache_parent;
-	bool dirty;		/* sync to database on destroy? */
+	struct user_info *user;
 };
 
 
@@ -90,7 +93,10 @@ extern GObject *ui_object(GtkBuilder *b, const char *id);
 
 extern struct update *update_new(void);
 extern void update_free(struct update *u);
-extern struct update *update_new_from_json(JsonObject *obj, GError **err_p);
+extern struct update *update_new_from_json(
+	JsonObject *obj,
+	struct user_cache *uc,		/* if NULL, ret->user == NULL */
+	GError **err_p);
 
 
 /* from usercache.c */
