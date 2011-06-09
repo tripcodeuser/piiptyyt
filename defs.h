@@ -8,6 +8,7 @@
 #include <glib.h>
 #include <gtk/gtk.h>
 #include <json-glib/json-glib.h>
+#include <sqlite3.h>
 
 
 /* app-wide consumer key, consumer secret. */
@@ -142,6 +143,22 @@ extern bool oauth_login(
 extern bool format_from_json(
 	void *dest,
 	JsonObject *obj,
+	const struct field_desc *fields,
+	size_t num_fields);
+
+/* the sqlite formatters interpret the `fields' array as a sequence of fields
+ * in the structure that correspond to columns, or parameters, in offsets
+ * [0..num_fields).
+ */
+extern void format_to_sqlite(
+	sqlite3_stmt *dest,
+	const void *src,
+	const struct field_desc *fields,
+	size_t num_fields);
+
+extern void format_from_sqlite(
+	void *dst,
+	sqlite3_stmt *src,
 	const struct field_desc *fields,
 	size_t num_fields);
 
