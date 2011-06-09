@@ -33,12 +33,15 @@ struct piiptyyt_state
  */
 struct field_desc
 {
-	const char *name;	/* name in the external format */
+	const char *name;	/* name in JSON */
+	const char *column;	/* column name in SQL database */
 	off_t offset;		/* field offset */
 	char type;			/* see above */
 };
 
-#define FIELD(s, type, fieldname, name) { (name), offsetof(s, fieldname), (type) }
+#define SQL_FIELD(s, type, fieldname, name, colname) \
+	{ (name), (colname), offsetof(s, fieldname), (type) }
+#define FIELD(s, t, fn, name) SQL_FIELD(s, t, fn, name, name)
 #define FLD(s, type, name) FIELD(s, type, name, #name)
 
 
@@ -161,6 +164,16 @@ extern void format_from_sqlite(
 	sqlite3_stmt *src,
 	const struct field_desc *fields,
 	size_t num_fields);
+
+extern bool store_to_sqlite(
+	sqlite3 *dest,
+	const char *tablename,
+	const char *idcolumn,
+	int64_t idvalue,
+	const void *src,
+	const struct field_desc *fields,
+	size_t num_fields,
+	GError **err_p);
 
 
 /* from oauth.c */

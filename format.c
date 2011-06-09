@@ -109,3 +109,70 @@ void format_from_sqlite(
 		}
 	}
 }
+
+
+bool store_to_sqlite(
+	sqlite3 *db,
+	const char *tablename,
+	const char *idcolumn,
+	int64_t idvalue,
+	const void *src,
+	const struct field_desc *fields,
+	size_t num_fields,
+	GError **err_p)
+{
+	GString *sql = g_string_sized_new(32 + num_fields * 32);
+
+	/* compose the update statement. */
+	g_string_append_printf(sql, "UPDATE %s SET ", tablename);
+	for(size_t i=0; i < num_fields; i++) {
+		g_string_append_printf(sql, "%s%s = ?",
+			i > 0 ? ", " : "", fields[i].column);
+	}
+	g_string_append_printf(sql, " WHERE %s = ?", idcolumn);
+
+	sqlite3_stmt *stmt = NULL;
+	int n = sqlite3_prepare_v2(db, sql->str, sql->len, &stmt, NULL);
+	if(n != SQLITE_OK) goto fail;
+	format_to_sqlite(stmt, src, fields, num_fields);
+	sqlite3_bind_int64(stmt, num_fields, idvalue);
+	n = sqlite3_step(stmt);
+	if(n != SQLITE_DONE) goto fail;
+	if(sqlite3_changes(db) < 1) {
+		sqlite3_finalize(stmt);
+		g_string_truncate(sql, 0);
+
+		/* compose an insert statement. */
+		g_string_append_printf(sql, "INSERT INTO %s (", tablename);
+		for(size_t i=0; i < num_fields; i++) {
+			g_string_append_printf(sql, "%s%s", i > 0 ? ", " : "",
+				fields[i].column);
+		}
+		g_string_append_printf(sql, "%s%s", num_fields > 0 ? ", " : "",
+			idcolumn);
+		g_string_append(sql, ") VALUES (");
+		for(size_t i=0; i < num_fields; i++) {
+			g_string_append_printf(sql, "%s?", i > 0 ? ", " : "");
+		}
+		g_string_append_printf(sql, "%s?", num_fields > 0 ? ", " : "");
+		g_string_append(sql, ")");
+
+		n = sqlite3_prepare_v2(db, sql->str, sql->len, &stmt, NULL);
+		if(n != SQLITE_OK) goto fail;
+		format_to_sqlite(stmt, src, fields, num_fields);
+		sqlite3_bind_int64(stmt, num_fields, idvalue);
+		n = sqlite3_step(stmt);
+		if(n != SQLITE_DONE) goto fail;
+	}
+
+	g_string_free(sql, TRUE);
+	sqlite3_finalize(stmt);
+	return true;
+
+fail:
+	g_set_error(err_p, 0, sqlite3_extended_errcode(db), "%s",
+		sqlite3_errmsg(db));
+	g_string_free(sql, TRUE);
+	if(stmt != NULL) sqlite3_finalize(stmt);
+	return false;
+}

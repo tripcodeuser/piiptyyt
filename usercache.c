@@ -28,8 +28,8 @@ struct user_cache
 
 
 static const struct field_desc user_info_fields[] = {
-	FIELD(struct user_info, 's', longname, "name"),
-	FIELD(struct user_info, 's', screenname, "screen_name"),
+	SQL_FIELD(struct user_info, 's', longname, "name", "longname"),
+	SQL_FIELD(struct user_info, 's', screenname, "screen_name", "screenname"),
 	FLD(struct user_info, 's', profile_image_url),
 	FLD(struct user_info, 'b', protected),
 	FLD(struct user_info, 'b', verified),
@@ -128,66 +128,17 @@ static bool flush_user_info(
 	const struct user_info *ui,
 	GError **err_p)
 {
-	fprintf(stderr, "flushing user info for %llu to database.\n",
-		(unsigned long long)ui->id);
-
-	if(!do_sql(c->db, "BEGIN", err_p)) {
-		printf("at begin\n");
+	if(!do_sql(c->db, "BEGIN", err_p)
+		|| !store_to_sqlite(c->db, "cached_user_info", "id", ui->id,
+				ui, user_info_fields, G_N_ELEMENTS(user_info_fields),
+				err_p)
+		|| !do_sql(c->db, "COMMIT", err_p))
+	{
+		do_sql(c->db, "ROLLBACK", NULL);
 		return false;
+	} else {
+		return true;
 	}
-
-	sqlite3_stmt *stmt = NULL;
-	int n = sqlite3_prepare_v2(c->db,
-		"UPDATE cached_user_info "
-			"SET longname = ?, screenname = ?, profile_image_url = ?, "
-				"protected = ?, verified = ?, following = ? "
-			"WHERE id = ? OR screenname = ?", -1, &stmt, NULL);
-	if(n != SQLITE_OK) {
-		printf("at update\n");
-		goto fail;
-	}
-
-	format_to_sqlite(stmt, ui, user_info_fields,
-		G_N_ELEMENTS(user_info_fields));
-	sqlite3_bind_int64(stmt, 7, ui->id);
-	sqlite3_bind_text(stmt, 8, ui->screenname, strlen(ui->screenname),
-		SQLITE_STATIC);
-	n = sqlite3_step(stmt);
-	if(n != SQLITE_DONE) {
-		printf("at update step\n");
-		goto fail;
-	}
-	if(sqlite3_changes(c->db) == 0) {
-		/* insert a new row. (sigh.) */
-		sqlite3_finalize(stmt);
-		n = sqlite3_prepare_v2(c->db,
-			"INSERT INTO cached_user_info "
-				"(longname, screenname, profile_image_url, protected, "
-				"verified, following) "
-				"VALUES (?, ?, ?, ?, ?, ?)", -1, &stmt, NULL);
-		if(n != SQLITE_OK) {
-			printf("at insert prepare\n");
-			goto fail;
-		}
-		format_to_sqlite(stmt, ui, user_info_fields,
-			G_N_ELEMENTS(user_info_fields));
-		n = sqlite3_step(stmt);
-		if(n != SQLITE_DONE) {
-			printf("at insert step\n");
-			goto fail;
-		}
-	}
-
-	if(!do_sql(c->db, "COMMIT", NULL)) goto fail;
-
-	sqlite3_finalize(stmt);
-	return true;
-
-fail:
-	set_sqlite_error(err_p, c->db);
-	do_sql(c->db, "ROLLBACK", NULL);
-	if(stmt != NULL) sqlite3_finalize(stmt);
-	return false;
 }
 
 
