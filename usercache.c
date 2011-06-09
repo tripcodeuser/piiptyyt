@@ -55,7 +55,8 @@ static struct user_info *fetch_user_info(
 {
 	sqlite3_stmt *stmt = NULL;
 	int n = sqlite3_prepare_v2(c->db,
-		"SELECT * FROM cached_user_info WHERE id = ?", -1, &stmt, NULL);
+		"SELECT longname,screenname,profile_image_url,protected,verified,following"
+			" FROM cached_user_info WHERE id = ?", -1, &stmt, NULL);
 	if(n != SQLITE_OK) {
 		set_sqlite_error(err_p, c->db);
 		if(stmt != NULL) sqlite3_finalize(stmt);
@@ -68,7 +69,8 @@ static struct user_info *fetch_user_info(
 	if(n == SQLITE_ROW) {
 		u = g_new0(struct user_info, 1);
 		u->id = userid;
-		/* FIXME: do whatever */
+		format_from_sqlite(u, stmt, user_info_fields,
+			G_N_ELEMENTS(user_info_fields));
 	} else if(n == SQLITE_DONE) {
 		/* not found. */
 		u = NULL;
@@ -108,12 +110,100 @@ static gpointer user_info_fetch_or_new(gpointer keyptr)
 }
 
 
+static bool do_sql(sqlite3 *db, const char *sql, GError **err_p)
+{
+	char *errmsg = NULL;
+	int n = sqlite3_exec(db, sql, NULL, NULL, &errmsg);
+	if(n != SQLITE_OK) {
+		g_set_error(err_p, 0, 0, "%s", errmsg);
+		return false;
+	} else {
+		return true;
+	}
+}
+
+
+static bool flush_user_info(
+	struct user_cache *c,
+	const struct user_info *ui,
+	GError **err_p)
+{
+	fprintf(stderr, "flushing user info for %llu to database.\n",
+		(unsigned long long)ui->id);
+
+	if(!do_sql(c->db, "BEGIN", err_p)) {
+		printf("at begin\n");
+		return false;
+	}
+
+	sqlite3_stmt *stmt = NULL;
+	int n = sqlite3_prepare_v2(c->db,
+		"UPDATE cached_user_info "
+			"SET longname = ?, screenname = ?, profile_image_url = ?, "
+				"protected = ?, verified = ?, following = ? "
+			"WHERE id = ? OR screenname = ?", -1, &stmt, NULL);
+	if(n != SQLITE_OK) {
+		printf("at update\n");
+		goto fail;
+	}
+
+	format_to_sqlite(stmt, ui, user_info_fields,
+		G_N_ELEMENTS(user_info_fields));
+	sqlite3_bind_int64(stmt, 7, ui->id);
+	sqlite3_bind_text(stmt, 8, ui->screenname, strlen(ui->screenname),
+		SQLITE_STATIC);
+	n = sqlite3_step(stmt);
+	if(n != SQLITE_DONE) {
+		printf("at update step\n");
+		goto fail;
+	}
+	if(sqlite3_changes(c->db) == 0) {
+		/* insert a new row. (sigh.) */
+		sqlite3_finalize(stmt);
+		n = sqlite3_prepare_v2(c->db,
+			"INSERT INTO cached_user_info "
+				"(longname, screenname, profile_image_url, protected, "
+				"verified, following) "
+				"VALUES (?, ?, ?, ?, ?, ?)", -1, &stmt, NULL);
+		if(n != SQLITE_OK) {
+			printf("at insert prepare\n");
+			goto fail;
+		}
+		format_to_sqlite(stmt, ui, user_info_fields,
+			G_N_ELEMENTS(user_info_fields));
+		n = sqlite3_step(stmt);
+		if(n != SQLITE_DONE) {
+			printf("at insert step\n");
+			goto fail;
+		}
+	}
+
+	if(!do_sql(c->db, "COMMIT", NULL)) goto fail;
+
+	sqlite3_finalize(stmt);
+	return true;
+
+fail:
+	set_sqlite_error(err_p, c->db);
+	do_sql(c->db, "ROLLBACK", NULL);
+	if(stmt != NULL) sqlite3_finalize(stmt);
+	return false;
+}
+
+
 static void user_info_free(struct user_info *ui)
 {
 	if(ui == NULL) return;
 
-	fprintf(stderr, "would flush user info for %llu to database.\n",
-		(unsigned long long)ui->id);
+	GError *err = NULL;
+	if(!flush_user_info(current_cache, ui, &err)) {
+#ifndef NDEBUG
+		g_warning("flush_user_info failed: %s  (code %d)",
+			err->message, err->code);
+#endif
+		g_error_free(err);
+		/* it's only a cache. proceed. */
+	}
 
 	g_free(ui->longname);
 	g_free(ui->screenname);
