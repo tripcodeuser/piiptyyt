@@ -81,33 +81,6 @@ GObject *ui_object(GtkBuilder *b, const char *id)
 }
 
 
-#if !1
-static void inject_test_data(GtkListStore *store)
-{
-	gtk_list_store_clear(store);
-
-	GError *err = NULL;
-	GdkPixbuf *av = gdk_pixbuf_new_from_file("img/tablecat.png", &err);
-	if(err != NULL) ERROR_FAIL(err);
-
-	static const char *things[] = {
-		"hello i am table cat",
-		"lord of cats, master of tables",
-	};
-	for(int i=0; i < G_N_ELEMENTS(things); i++) {
-		GtkTreeIter iter;
-		gtk_list_store_append(store, &iter);
-		gtk_list_store_set(store, &iter,
-			0, g_object_ref(G_OBJECT(av)),
-			1, things[i],
-			-1);
-	}
-
-	g_object_unref(G_OBJECT(av));
-}
-#endif
-
-
 static gboolean main_wnd_delete(GtkWidget *obj, GdkEvent *ev, void *data) {
 	/* geez. this sure feels like bureaucracy right here */
 	return FALSE;
