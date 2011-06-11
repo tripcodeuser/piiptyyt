@@ -11,6 +11,8 @@
 #include "defs.h"
 
 
+#define UPDATE_INTERVAL_MSEC (15 * 1000)
+
 #define ERROR_FAIL(err) toplevel_err(__FILE__, __LINE__, __func__, (err))
 
 
@@ -227,6 +229,28 @@ static void fetch_more_updates(
 }
 
 
+struct update_interval_ctx
+{
+	guint event_name;
+};
+
+
+static gboolean on_update_interval(gpointer dataptr)
+{
+	struct update_interval_ctx *ctx = dataptr;
+
+	printf("would fetch more tweates here\n");
+
+// end:
+	/* wait another interval from the end of this process, rather than from
+	 * the beginning.
+	 */
+	ctx->event_name = g_timeout_add(UPDATE_INTERVAL_MSEC,
+		&on_update_interval, ctx);
+	return FALSE;
+}
+
+
 int main(int argc, char *argv[])
 {
 	g_thread_init(NULL);
@@ -295,14 +319,19 @@ int main(int argc, char *argv[])
 	struct update_model *model = update_model_new(tweet_model);
 	fetch_more_updates(state, uc, model, 20, 0);
 
+	struct update_interval_ctx *uictx = g_new(struct update_interval_ctx, 1);
+	uictx->event_name = g_timeout_add(UPDATE_INTERVAL_MSEC,
+		&on_update_interval, uictx);
+
 	gtk_main();
+
+	gboolean ok = g_source_remove(uictx->event_name);
+	if(!ok) g_debug("ui refresh timeout %u not found", uictx->event_name);
 
 	/* TODO: check errors etc */
 	state_write(state, NULL);
 	state_free(state);
-
 	user_cache_close(uc);
-
 	update_model_free(model);
 
 	return EXIT_SUCCESS;
