@@ -26,12 +26,12 @@ tags: $(wildcard *.[ch])
 
 piiptyyt: main.o state.o login.o oauth.o update.o usercache.o format.o \
 		model.o
-	@echo "LD $@"
+	@echo " LD $@"
 	@$(CC) -o $@ $^ $(CFLAGS) $(LDFLAGS) $(LIBS)
 
 
 %.o: %.c
-	@echo "CC $@"
+	@echo " CC $@"
 	@$(CC) -c -o $@ $< $(CFLAGS)
 
 
