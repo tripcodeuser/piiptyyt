@@ -88,6 +88,23 @@ struct update
 };
 
 
+/* update display data model.
+ *
+ * downsides: changing current_ids is always an O(n) operation, where n =
+ * max(num_updates, num_updates'). this isn't really significant with fewer
+ * than 2k updates, as that will significantly eject other data from a 16k L1
+ * data cache.
+ *
+ * TODO: make this private, move it into model.c entirely
+ */
+struct update_model
+{
+	int count;
+	uint64_t *current_ids;	/* largest first, always sorted */
+	GtkListStore *store;
+};
+
+
 /* from main.c */
 
 extern GObject *ui_object(GtkBuilder *b, const char *id);
@@ -105,8 +122,11 @@ extern struct update *update_new_from_json(
 
 /* from model.c */
 
+extern struct update_model *update_model_new(GtkListStore *store);
+extern void update_model_free(struct update_model *model);
+
 extern void add_updates_to_model(
-	GtkListStore *model,
+	struct update_model *model,
 	struct update **updates,
 	size_t num_updates);
 

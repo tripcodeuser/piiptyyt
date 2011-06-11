@@ -195,7 +195,7 @@ static GPtrArray *parse_update_array(
 static void fetch_more_updates(
 	struct piiptyyt_state *state,
 	struct user_cache *uc,
-	GtkListStore *model,
+	struct update_model *model,
 	size_t max_count,
 	uint64_t low_update_id)
 {
@@ -292,7 +292,8 @@ int main(int argc, char *argv[])
 	g_object_unref(G_OBJECT(b));
 	b = NULL;
 
-	fetch_more_updates(state, uc, tweet_model, 20, 0);
+	struct update_model *model = update_model_new(tweet_model);
+	fetch_more_updates(state, uc, model, 20, 0);
 
 	gtk_main();
 
@@ -301,6 +302,8 @@ int main(int argc, char *argv[])
 	state_free(state);
 
 	user_cache_close(uc);
+
+	update_model_free(model);
 
 	return EXIT_SUCCESS;
 }
