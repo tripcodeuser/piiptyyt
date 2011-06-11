@@ -170,6 +170,7 @@ extern bool store_to_sqlite(
 	const char *tablename,
 	const char *idcolumn,
 	int64_t idvalue,
+	const char *idvalue_str,
 	const void *src,
 	const struct field_desc *fields,
 	size_t num_fields,

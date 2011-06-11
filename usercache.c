@@ -34,6 +34,7 @@ static const struct field_desc user_info_fields[] = {
 	FLD(struct user_info, 'b', protected),
 	FLD(struct user_info, 'b', verified),
 	FLD(struct user_info, 'b', following),
+	FLD(struct user_info, 'i', id),
 };
 
 
@@ -129,7 +130,7 @@ static bool flush_user_info(
 	GError **err_p)
 {
 	if(!do_sql(c->db, "BEGIN", err_p)
-		|| !store_to_sqlite(c->db, "cached_user_info", "id", ui->id,
+		|| !store_to_sqlite(c->db, "cached_user_info", "id", ui->id, NULL,
 				ui, user_info_fields, G_N_ELEMENTS(user_info_fields),
 				err_p)
 		|| !do_sql(c->db, "COMMIT", err_p))

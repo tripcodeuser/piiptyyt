@@ -111,11 +111,27 @@ void format_from_sqlite(
 }
 
 
+static void bind_idvalue(
+	sqlite3_stmt *stmt,
+	int col_ix,
+	int64_t idvalue,
+	const char *idvalue_str)
+{
+	if(idvalue_str != NULL) {
+		sqlite3_bind_text(stmt, col_ix, idvalue_str, strlen(idvalue_str),
+			SQLITE_STATIC);
+	} else {
+		sqlite3_bind_int64(stmt, col_ix, idvalue);
+	}
+}
+
+
 bool store_to_sqlite(
 	sqlite3 *db,
 	const char *tablename,
 	const char *idcolumn,
 	int64_t idvalue,
+	const char *idvalue_str,
 	const void *src,
 	const struct field_desc *fields,
 	size_t num_fields,
@@ -135,32 +151,47 @@ bool store_to_sqlite(
 	int n = sqlite3_prepare_v2(db, sql->str, sql->len, &stmt, NULL);
 	if(n != SQLITE_OK) goto fail;
 	format_to_sqlite(stmt, src, fields, num_fields);
-	sqlite3_bind_int64(stmt, num_fields, idvalue);
+	bind_idvalue(stmt, num_fields, idvalue, idvalue_str);
 	n = sqlite3_step(stmt);
 	if(n != SQLITE_DONE) goto fail;
-	if(sqlite3_changes(db) < 1) {
-		sqlite3_finalize(stmt);
-		g_string_truncate(sql, 0);
+	/* sqlite3_total_changes() counts matched rows, not necessarily rows that
+	 * got a different value. that's what we want here.
+	 */
+	if(sqlite3_total_changes(db) < 1) {
+		sqlite3_finalize(stmt); stmt = NULL;
 
 		/* compose an insert statement. */
+		bool separate_id = true;
+		for(size_t i=0; i < num_fields; i++) {
+			if(strcmp(fields[i].column, idcolumn) == 0) {
+				separate_id = false;
+				break;
+			}
+		}
+
+		g_string_truncate(sql, 0);
 		g_string_append_printf(sql, "INSERT INTO %s (", tablename);
 		for(size_t i=0; i < num_fields; i++) {
 			g_string_append_printf(sql, "%s%s", i > 0 ? ", " : "",
 				fields[i].column);
 		}
-		g_string_append_printf(sql, "%s%s", num_fields > 0 ? ", " : "",
-			idcolumn);
+		if(separate_id) {
+			g_string_append_printf(sql, "%s%s", num_fields > 0 ? ", " : "",
+				idcolumn);
+		}
 		g_string_append(sql, ") VALUES (");
 		for(size_t i=0; i < num_fields; i++) {
 			g_string_append_printf(sql, "%s?", i > 0 ? ", " : "");
 		}
-		g_string_append_printf(sql, "%s?", num_fields > 0 ? ", " : "");
+		if(separate_id) {
+			g_string_append_printf(sql, "%s?", num_fields > 0 ? ", " : "");
+		}
 		g_string_append(sql, ")");
 
 		n = sqlite3_prepare_v2(db, sql->str, sql->len, &stmt, NULL);
 		if(n != SQLITE_OK) goto fail;
 		format_to_sqlite(stmt, src, fields, num_fields);
-		sqlite3_bind_int64(stmt, num_fields, idvalue);
+		if(separate_id) bind_idvalue(stmt, num_fields, idvalue, idvalue_str);
 		n = sqlite3_step(stmt);
 		if(n != SQLITE_DONE) goto fail;
 	}
