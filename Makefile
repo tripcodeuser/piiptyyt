@@ -26,7 +26,13 @@ tags: $(wildcard *.[ch])
 
 piiptyyt: main.o state.o login.o oauth.o update.o usercache.o format.o \
 		model.o
-	$(CC) -o $@ $^ $(CFLAGS) $(LDFLAGS) $(LIBS)
+	@echo "LD $@"
+	@$(CC) -o $@ $^ $(CFLAGS) $(LDFLAGS) $(LIBS)
+
+
+%.o: %.c
+	@echo "CC $@"
+	@$(CC) -c -o $@ $< $(CFLAGS)
 
 
 # FIXME: add auto dependency generation, collection
