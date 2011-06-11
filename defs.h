@@ -103,6 +103,14 @@ extern struct update *update_new_from_json(
 	GError **err_p);
 
 
+/* from model.c */
+
+extern void add_updates_to_model(
+	GtkListStore *model,
+	struct update **updates,
+	size_t num_updates);
+
+
 /* from usercache.c */
 
 extern struct user_cache *user_cache_open(void);

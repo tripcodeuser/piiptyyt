@@ -79,9 +79,9 @@ GObject *ui_object(GtkBuilder *b, const char *id)
 }
 
 
-static void inject_test_data(GObject *model_obj)
+#if !1
+static void inject_test_data(GtkListStore *store)
 {
-	GtkListStore *store = GTK_LIST_STORE(model_obj);
 	gtk_list_store_clear(store);
 
 	GError *err = NULL;
@@ -103,6 +103,7 @@ static void inject_test_data(GObject *model_obj)
 
 	g_object_unref(G_OBJECT(av));
 }
+#endif
 
 
 static gboolean main_wnd_delete(GtkWidget *obj, GdkEvent *ev, void *data) {
@@ -191,6 +192,41 @@ static GPtrArray *parse_update_array(
 }
 
 
+static void fetch_more_updates(
+	struct piiptyyt_state *state,
+	struct user_cache *uc,
+	GtkListStore *model,
+	size_t max_count,
+	uint64_t low_update_id)
+{
+	/* experimental: fetch 20 most recent twates, parse them, output something
+	 * about them.
+	 */
+	const char *status_uri = "https://api.twitter.com/1/statuses/home_timeline.json";
+	SoupSession *ss = soup_session_async_new();
+	SoupMessage *msg = make_resource_request_msg(status_uri, state, NULL);
+	soup_session_send_message(ss, msg);
+	if(msg->status_code != SOUP_STATUS_OK) {
+		fprintf(stderr, "could not get twet: %d %s\n", msg->status_code,
+			soup_status_get_phrase(msg->status_code));
+	} else {
+		GError *err = NULL;
+		GPtrArray *updates = parse_update_array(msg->response_body->data,
+			msg->response_body->length, uc, &err);
+		if(updates == NULL) {
+			fprintf(stderr, "can't parse updates: %s\n", err->message);
+			g_error_free(err);
+		} else {
+			add_updates_to_model(model, (struct update **)updates->pdata,
+				updates->len);
+			g_ptr_array_free(updates, TRUE);
+		}
+	}
+	g_object_unref(msg);
+	g_object_unref(ss);
+}
+
+
 int main(int argc, char *argv[])
 {
 	g_thread_init(NULL);
@@ -223,8 +259,8 @@ int main(int argc, char *argv[])
 		return EXIT_FAILURE;
 	}
 
-	GObject *tweet_model = ui_object(b, "tweet_model");
-	inject_test_data(tweet_model);
+	GtkListStore *tweet_model = GTK_LIST_STORE(ui_object(b, "tweet_model"));
+	gtk_list_store_clear(tweet_model);
 
 	GObject *main_wnd = ui_object(b, "piiptyyt_main_wnd");
 	g_signal_connect(main_wnd, "delete-event",
@@ -256,39 +292,7 @@ int main(int argc, char *argv[])
 	g_object_unref(G_OBJECT(b));
 	b = NULL;
 
-	/* experimental: fetch 20 most recent twates, parse them, output something
-	 * about them.
-	 */
-	const char *status_uri = "https://api.twitter.com/1/statuses/home_timeline.json";
-	SoupSession *ss = soup_session_async_new();
-	SoupMessage *msg = make_resource_request_msg(status_uri, state, NULL);
-	soup_session_send_message(ss, msg);
-	if(msg->status_code != SOUP_STATUS_OK) {
-		fprintf(stderr, "could not get twet: %d %s\n", msg->status_code,
-			soup_status_get_phrase(msg->status_code));
-	} else {
-		GError *err = NULL;
-		GPtrArray *updates = parse_update_array(msg->response_body->data,
-			msg->response_body->length, uc, &err);
-		if(updates == NULL) {
-			fprintf(stderr, "can't parse updates: %s\n", err->message);
-			g_error_free(err);
-		} else {
-			for(int i=0; i < updates->len; i++) {
-				struct update *u = g_ptr_array_index(updates, i);
-				const char *user = "(unknown)";
-				if(u->user != NULL && u->user->screenname != NULL) {
-					user = u->user->screenname;
-				}
-				printf("update %llu: %s: `%s' (via `%s')\n",
-					(unsigned long long)u->id, user,
-					u->text, u->source);
-			}
-			g_ptr_array_free(updates, TRUE);
-		}
-	}
-	g_object_unref(msg);
-	g_object_unref(ss);
+	fetch_more_updates(state, uc, tweet_model, 20, 0);
 
 	gtk_main();
 
