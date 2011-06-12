@@ -270,9 +270,6 @@ int main(int argc, char *argv[])
 		return EXIT_FAILURE;
 	}
 
-	GtkListStore *tweet_model = GTK_LIST_STORE(ui_object(b, "tweet_model"));
-	gtk_list_store_clear(tweet_model);
-
 	GObject *main_wnd = ui_object(b, "piiptyyt_main_wnd");
 	g_signal_connect(main_wnd, "delete-event",
 		G_CALLBACK(&main_wnd_delete), NULL);
@@ -300,10 +297,15 @@ int main(int argc, char *argv[])
 		}
 	}
 
+	GtkListStore *tweet_model = GTK_LIST_STORE(ui_object(b, "tweet_model"));
+	gtk_list_store_clear(tweet_model);
+	GtkTreeView *tweet_view = GTK_TREE_VIEW(ui_object(b, "tweet_view"));
+	struct update_model *model = update_model_new(
+		tweet_view, tweet_model);
+
 	g_object_unref(G_OBJECT(b));
 	b = NULL;
 
-	struct update_model *model = update_model_new(tweet_model);
 	fetch_more_updates(state, uc, model, 20, 0);
 
 	struct update_interval_ctx *uictx = g_new(struct update_interval_ctx, 1);

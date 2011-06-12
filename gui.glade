@@ -6,15 +6,9 @@
     <columns>
       <!-- column-name userpic -->
       <column type="GdkPixbuf"/>
-      <!-- column-name tweet -->
-      <column type="gchararray"/>
+      <!-- column-name update -->
+      <column type="GObject"/>
     </columns>
-    <data>
-      <row>
-        <col id="0">tablecat.png</col>
-        <col id="1" translatable="yes">hello i am table cat</col>
-      </row>
-    </data>
   </object>
   <object class="GtkWindow" id="piiptyyt_main_wnd">
     <child>
@@ -137,9 +131,6 @@
                 <property name="title">tweet</property>
                 <child>
                   <object class="GtkCellRendererText" id="view_tweet_renderer"/>
-                  <attributes>
-                    <attribute name="text">1</attribute>
-                  </attributes>
                 </child>
               </object>
             </child>

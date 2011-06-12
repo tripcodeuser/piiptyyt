@@ -1,5 +1,6 @@
 
 #include <stdlib.h>
+#include <string.h>
 #include <assert.h>
 #include <glib.h>
 #include <glib-object.h>
@@ -125,26 +126,78 @@ void add_updates_to_model(
 
 	for(size_t i=0; i < row_count; i++) {
 		gtk_list_store_insert_with_values(model->store, NULL, row_pos[i],
-			0, g_object_ref(G_OBJECT(av)),
-			1, g_strdup(dedup[i]->text),		/* FIXME: memory leak */
+			0, g_object_ref(av),
+			1, g_object_ref(dedup[i]),
 			-1);
 	}
 }
 
 
-struct update_model *update_model_new(GtkListStore *store)
+static void set_markup_in_cr_from_object(
+	GtkTreeViewColumn *col,
+	GtkCellRenderer *cell,
+	GtkTreeModel *model,
+	GtkTreeIter *iter,
+	gpointer dataptr)
+{
+//	struct update_model *m = dataptr;
+
+	GValue val = { 0 };
+	gtk_tree_model_get_value(model, iter, 1, &val);
+	if(!G_VALUE_HOLDS(&val, G_TYPE_OBJECT)) {
+		g_warning("%s: called for type `%s', not `%s'",
+			__func__, G_VALUE_TYPE_NAME(&val), g_type_name(G_TYPE_OBJECT));
+		goto end;
+	}
+
+	GObject *obj = g_value_get_object(&val);
+	if(!PT_IS_UPDATE(obj)) {
+		g_warning("%s: called for object of type `%s', expected `%s'",
+			__func__, g_type_name(G_OBJECT_TYPE(obj)),
+			g_type_name(PT_UPDATE_TYPE));
+		goto end;
+	}
+
+	PtUpdate *update = PT_UPDATE(obj);
+	char *markup = NULL;
+	g_object_get(update, "markup", &markup, NULL);
+	g_object_set(cell, "markup", markup, NULL);
+	g_free(markup);
+
+end:
+	g_value_unset(&val);
+}
+
+
+struct update_model *update_model_new(
+	GtkTreeView *view,
+	GtkListStore *store)
 {
 	struct update_model *m = g_new(struct update_model, 1);
 	m->count = 0;
 	m->current_ids = NULL;
-	m->store = GTK_LIST_STORE(g_object_ref(G_OBJECT(store)));
+	m->store = g_object_ref(store);
+	m->view = g_object_ref(view);
+
+	GtkTreeViewColumn *upd_column = gtk_tree_view_get_column(view, 1);
+	GList *rs_list = gtk_cell_layout_get_cells(GTK_CELL_LAYOUT(upd_column));
+	if(rs_list != NULL) {
+		m->update_col_r = g_object_ref(
+			GTK_CELL_RENDERER(g_list_first(rs_list)->data));
+		g_list_free(rs_list);
+		gtk_tree_view_column_set_cell_data_func(upd_column,
+			m->update_col_r, &set_markup_in_cr_from_object, m, NULL);
+	}
+
 	return m;
 }
 
 
 void update_model_free(struct update_model *model)
 {
-	g_object_unref(G_OBJECT(model->store));
+	g_object_unref(model->store);
+	g_object_unref(model->view);
+	g_object_unref(model->update_col_r);
 	g_free(model->current_ids);
 	g_free(model);
 }

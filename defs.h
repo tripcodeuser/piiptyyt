@@ -87,6 +87,8 @@ struct update_model
 	int count;
 	uint64_t *current_ids;	/* largest first, always sorted */
 	GtkListStore *store;
+	GtkTreeView *view;
+	GtkCellRenderer *update_col_r;
 };
 
 
@@ -98,7 +100,9 @@ extern GQuark piiptyyt_error_domain(void);
 
 /* from model.c */
 
-extern struct update_model *update_model_new(GtkListStore *store);
+extern struct update_model *update_model_new(
+	GtkTreeView *view,
+	GtkListStore *store);
 extern void update_model_free(struct update_model *model);
 
 extern void add_updates_to_model(
