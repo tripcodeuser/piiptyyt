@@ -84,7 +84,6 @@ static void pt_update_finalize(GObject *object)
 	g_free(u->in_rep_to_screen_name);
 	g_free(u->source);
 	g_free(u->text);
-	g_free(u);
 
 	GObjectClass *parent_class = g_type_class_peek_parent(
 		PT_UPDATE_GET_CLASS(u));
