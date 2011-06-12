@@ -70,7 +70,8 @@ void format_to_sqlite(
 	for(size_t i=0; i < num_fields; i++) {
 		const void *ptr = src + fields[i].offset;
 		int ix = i + 1;
-		switch(fields[i].type) {
+		bool null_ok = islower(fields[i].type);
+		switch(tolower(fields[i].type)) {
 		case 'i':
 			sqlite3_bind_int64(dest, ix, *(const int64_t *)ptr);
 			break;
@@ -79,7 +80,15 @@ void format_to_sqlite(
 			break;
 		case 's': {
 			const char *str = *(char *const *)ptr;
-			sqlite3_bind_text(dest, ix, str, strlen(str), SQLITE_TRANSIENT);
+			if(str != NULL) {
+				sqlite3_bind_text(dest, ix, str, strlen(str),
+					SQLITE_TRANSIENT);
+			} else if(null_ok) {
+				sqlite3_bind_null(dest, ix);
+			} else {
+				/* FIXME: report */
+				g_error("null not ok for string");
+			}
 			break;
 		}
 		default:
@@ -98,7 +107,8 @@ void format_from_sqlite(
 	for(size_t i=0; i < num_fields; i++) {
 		void *ptr = dest + fields[i].offset;
 		int ix = i + 1;
-		switch(fields[i].type) {
+		/* FIXME: handle non-nullables */
+		switch(tolower(fields[i].type)) {
 		case 'i':
 			*(int64_t *)ptr = sqlite3_column_int64(src, ix);
 			break;

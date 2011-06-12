@@ -34,7 +34,7 @@ static const struct field_desc user_info_fields[] = {
 	FLD(struct user_info, 'b', protected),
 	FLD(struct user_info, 'b', verified),
 	FLD(struct user_info, 'b', following),
-	FLD(struct user_info, 'i', id),
+	FLD(struct user_info, 'I', id),
 };
 
 
