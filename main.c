@@ -9,6 +9,7 @@
 #include <libsoup/soup.h>
 
 #include "defs.h"
+#include "pt-update.h"
 
 
 #define UPDATE_INTERVAL_MSEC (15 * 1000)
@@ -144,12 +145,12 @@ static GPtrArray *parse_update_array(
 		json_parser_get_root(parser));
 	GList *contents = json_array_get_elements(list);
 	GPtrArray *updates = g_ptr_array_new_with_free_func(
-		(GDestroyNotify)&update_free);
+		(GDestroyNotify)&g_object_unref);
 	for(GList *cur = g_list_first(contents);
 		cur != NULL;
 		cur = g_list_next(cur))
 	{
-		struct update *u = update_new_from_json(
+		PtUpdate *u = pt_update_new_from_json(
 			json_node_get_object(cur->data), uc, err_p);
 		if(u == NULL) {
 			g_ptr_array_free(updates, TRUE);

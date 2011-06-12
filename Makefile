@@ -24,7 +24,7 @@ tags: $(wildcard *.[ch])
 	@ctags -R .
 
 
-piiptyyt: main.o state.o login.o oauth.o update.o usercache.o format.o \
+piiptyyt: main.o state.o login.o oauth.o pt-update.o usercache.o format.o \
 		model.o
 	@echo " LD $@"
 	@$(CC) -o $@ $^ $(CFLAGS) $(LDFLAGS) $(LIBS)
@@ -37,11 +37,11 @@ piiptyyt: main.o state.o login.o oauth.o update.o usercache.o format.o \
 
 # FIXME: add auto dependency generation, collection
 # (or just move shit over to automake, idgaf)
-main.o: main.c defs.h
+main.o: main.c defs.h pt-update.h
 state.o: state.c defs.h
 login.o: login.c defs.h
 oauth.o: oauth.c defs.h
-update.o: update.c defs.h
+pt-update.o: pt-update.c pt-update.h defs.h
 usercache.o: usercache.c defs.h
 format.o: format.c defs.h
-model.o: model.c defs.h
+model.o: model.c defs.h pt-update.h

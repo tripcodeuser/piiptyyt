@@ -6,6 +6,7 @@
 #include <gtk/gtk.h>
 
 #include "defs.h"
+#include "pt-update.h"
 
 
 #define id_in_model(m, id) (find_id_in_model((m), (id)) != NULL)
@@ -31,7 +32,7 @@ static uint64_t *find_id_in_model(struct update_model *model, uint64_t id)
 static size_t add_to_current_ids(
 	uint64_t **dst_p,
 	struct update_model *model,
-	struct update **src,
+	PtUpdate **src,
 	size_t count,
 	bool do_sort)
 {
