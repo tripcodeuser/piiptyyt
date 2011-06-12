@@ -8,6 +8,11 @@
 #include "pt-update.h"
 
 
+enum prop_names {
+	PROP_MARKUP = 1,
+};
+
+
 #define UF(t, f, n) FIELD(struct update, t, f, n)
 #define UFS(t, n) FIELD(struct update, t, n, #n)
 
@@ -46,6 +51,25 @@ PtUpdate *pt_update_new_from_json(
 
 	assert(u != NULL || err_p == NULL || *err_p != NULL);
 	return u;
+}
+
+
+static void pt_update_get_property(
+	GObject *object,
+	guint prop_id,
+	GValue *value,
+	GParamSpec *spec)
+{
+	PtUpdate *self = PT_UPDATE(object);
+	switch(prop_id) {
+	case PROP_MARKUP:
+		/* TODO */
+		g_value_set_string(value, self->text);
+		break;
+	default:
+		G_OBJECT_WARN_INVALID_PROPERTY_ID(object, prop_id, spec);
+		break;
+	}
 }
 
 
@@ -94,8 +118,17 @@ static void pt_update_finalize(GObject *object)
 static void pt_update_class_init(PtUpdateClass *klass)
 {
 	GObjectClass *obj_class = G_OBJECT_CLASS(klass);
+
 	obj_class->finalize = &pt_update_finalize;
 	obj_class->dispose = &pt_update_dispose;
+	obj_class->get_property = &pt_update_get_property;
+
+	GParamSpec *pspec = g_param_spec_string("markup",
+		"Pango markup for update's content",
+		"Get markup text",
+		"",
+		G_PARAM_READABLE | G_PARAM_STATIC_STRINGS);
+	g_object_class_install_property(obj_class, PROP_MARKUP, pspec);
 }
 
 
