@@ -62,6 +62,18 @@ static bool read_config(void)
 }
 
 
+GQuark piiptyyt_error_domain(void)
+{
+	static GQuark the_val;
+	static bool first = true;
+	if(first) {
+		the_val = g_quark_from_static_string("piiptyyt error domain");
+		first = false;
+	}
+	return the_val;
+}
+
+
 GtkBuilder *load_ui(void)
 {
 	GtkBuilder *b = gtk_builder_new();
@@ -76,8 +88,8 @@ GObject *ui_object(GtkBuilder *b, const char *id)
 {
 	GObject *o = gtk_builder_get_object(b, id);
 	if(o == NULL) {
-		GError *e = g_error_new(0, 0, "can't find object by id `%s'", id);
-		ERROR_FAIL(e);
+		ERROR_FAIL(g_error_new(PT_ERR_DOM, 0,
+			"can't find object by id `%s'", id));
 	}
 	return o;
 }

@@ -15,6 +15,8 @@
 #define CONSUMER_KEY "Q61Cbri9yBndDmUFaqz37g"
 #define CONSUMER_SECRET "7j4YTFcT9a0rWLPKLpQMwwGeJK40yiHUb5JlzVVvjs4"
 
+#define PT_ERR_DOM (piiptyyt_error_domain())
+
 
 /* persistent, named client state. */
 struct piiptyyt_state
@@ -91,6 +93,7 @@ struct update_model
 /* from main.c */
 
 extern GObject *ui_object(GtkBuilder *b, const char *id);
+extern GQuark piiptyyt_error_domain(void);
 
 
 /* from model.c */
