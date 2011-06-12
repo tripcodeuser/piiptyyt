@@ -11,15 +11,14 @@
 #include "defs.h"
 
 
-/* FIXME: hunt for changes */
+/* FIXME: an error exit at field i leaves fields [0..i) modified. */
 bool format_from_json(
 	void *dest,
 	JsonObject *obj,
 	const struct field_desc *fields,
-	size_t num_fields)
+	size_t num_fields,
+	GError **err_p)
 {
-	bool changed = false;
-
 	for(size_t i=0; i < num_fields; i++) {
 		const char *name = fields[i].name;
 		JsonNode *node = json_object_get_member(obj, name);
@@ -30,12 +29,10 @@ bool format_from_json(
 		bool null_ok = islower(fields[i].type),
 			is_null = json_node_is_null(node);
 		if(!null_ok && is_null) {
-			g_critical("%s: field `%s' is null, but not allowed to. AAGH",
+			g_set_error(err_p, 0, 0,
+				"%s: field `%s' is null, but not allowed to",
 				__func__, name);
-			/* FIXME: leaves old value there, but should instead return an
-			 * error
-			 */
-			continue;
+			return false;
 		}
 		void *ptr = dest + fields[i].offset;
 		switch(tolower(fields[i].type)) {
@@ -50,13 +47,15 @@ bool format_from_json(
 			*(char **)ptr = is_null ? NULL : g_strdup(json_object_get_string_member(obj, name));
 			break;
 		case 't':
-			g_error("decoding of time from JSON object, not implemented.");
+			g_set_error(err_p, 0, 0,
+				"decoding of time from JSON object, not implemented.");
+			return false;
 		default:
 			assert(false);
 		}
 	}
 
-	return changed;
+	return true;
 }
 
 

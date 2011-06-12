@@ -299,9 +299,19 @@ struct user_info *user_info_get_from_json(
 	current_cache = c;
 	struct user_info *ui = g_cache_insert(c->user_info_cache, key);
 	bool bare = (ui->screenname == NULL);
-	bool changed = format_from_json(ui, obj, user_info_fields,
-		G_N_ELEMENTS(user_info_fields));
-	ui->dirty = ui->dirty || bare || changed;
+	bool changed = true;	/* TODO: hunt */
+	if(!format_from_json(ui, obj, user_info_fields,
+		G_N_ELEMENTS(user_info_fields), NULL))
+	{
+		/* FIXME: this may leave *ui in a halfway state. fix this by making
+		 * format_from_json() atomic on error.
+		 */
+		current_cache = c;
+		g_cache_remove(c->user_info_cache, ui);
+		ui = NULL;
+	} else {
+		ui->dirty = ui->dirty || bare || changed;
+	}
 
 	return ui;
 }

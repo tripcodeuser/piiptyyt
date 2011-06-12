@@ -1,5 +1,6 @@
 
 #include <stddef.h>
+#include <assert.h>
 #include <glib.h>
 #include <json-glib/json-glib.h>
 
@@ -46,14 +47,16 @@ struct update *update_new_from_json(
 	GError **err_p)
 {
 	struct update *u = update_new();
-	format_from_json(u, obj, update_fields, G_N_ELEMENTS(update_fields));
-
-	if(uc != NULL) {
+	if(!format_from_json(u, obj,
+		update_fields, G_N_ELEMENTS(update_fields), err_p))
+	{
+		update_free(u);
+		u = NULL;
+	} else if(uc != NULL && !json_object_get_null_member(obj, "user")) {
 		JsonObject *user = json_object_get_object_member(obj, "user");
-		if(user != NULL) {
-			u->user = user_info_get_from_json(uc, user);
-		}
+		if(user != NULL) u->user = user_info_get_from_json(uc, user);
 	}
 
+	assert(u != NULL || err_p == NULL || *err_p != NULL);
 	return u;
 }

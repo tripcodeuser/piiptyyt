@@ -171,14 +171,15 @@ extern bool oauth_login(
 
 /* from format.c */
 
-/* reads prior fields. existing strings are g_free()'d. returns whether a
- * field was changed by input from the JSON object.
+/* reads prior fields. existing strings are g_free()'d. returns true on
+ * success, false [with error] on failure.
  */
 extern bool format_from_json(
 	void *dest,
 	JsonObject *obj,
 	const struct field_desc *fields,
-	size_t num_fields);
+	size_t num_fields,
+	GError **err_p);
 
 /* the sqlite formatters interpret the `fields' array as a sequence of fields
  * in the structure that correspond to columns, or parameters, in offsets
