@@ -24,7 +24,8 @@ static void toplevel_err(
 	GError *err)
 {
 	fprintf(stderr, "%s:%s:%d: %s (code %d)\n", file, func, line,
-		err->message, err->code);
+		err != NULL ? err->message : "(no message)",
+		err != NULL ? err->code : 0);
 	abort();
 }
 
