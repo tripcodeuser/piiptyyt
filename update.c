@@ -10,14 +10,14 @@
 #define UFS(t, n) FIELD(struct update, t, n, #n)
 
 static const struct field_desc update_fields[] = {
-	UFS('i', id),
+	UFS('I', id),
 	UF('i', in_rep_to_uid, "in_reply_to_user_id"),
 	UF('i', in_rep_to_sid, "in_reply_to_status_id"),
 	UFS('b', favorited),
 	UFS('b', truncated),
 	UF('s', in_rep_to_screen_name, "in_reply_to_screen_name"),
 	UFS('s', source),
-	UFS('s', text),
+	UFS('S', text),
 };
 
 

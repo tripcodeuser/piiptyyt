@@ -26,10 +26,13 @@ struct piiptyyt_state
 
 
 /* description of a field in a structure. types are
- * 's' for string
- * 'i' for int64_t
- * 'b' for bool
- * 't' for time_t, formatted as a standard UTC timestamp
+ * 's' for string (default NULL)
+ * 'i' for int64_t (default 0)
+ * 'b' for bool (default false)
+ * 't' for time_t, formatted as a standard UTC timestamp (default 1 jan 1970)
+ *
+ * capitalize letters to pop an error on NULL input, or to disallow storing of
+ * NULL strings to sqlite. default values may appear where NULL is allowed.
  */
 struct field_desc
 {

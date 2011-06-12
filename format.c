@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <ctype.h>
 #include <assert.h>
 #include <glib.h>
 #include <json-glib/json-glib.h>
@@ -21,22 +22,35 @@ bool format_from_json(
 
 	for(size_t i=0; i < num_fields; i++) {
 		const char *name = fields[i].name;
-		if(json_object_get_member(obj, name) == NULL) {
+		JsonNode *node = json_object_get_member(obj, name);
+		if(node == NULL) {
 			/* not present. skip. */
 			continue;
 		}
+		bool null_ok = islower(fields[i].type),
+			is_null = json_node_is_null(node);
+		if(!null_ok && is_null) {
+			g_critical("%s: field `%s' is null, but not allowed to. AAGH",
+				__func__, name);
+			/* FIXME: leaves old value there, but should instead return an
+			 * error
+			 */
+			continue;
+		}
 		void *ptr = dest + fields[i].offset;
-		switch(fields[i].type) {
+		switch(tolower(fields[i].type)) {
 		case 'i':
-			*(uint64_t *)ptr = json_object_get_int_member(obj, name);
+			*(uint64_t *)ptr = is_null ? 0 : json_object_get_int_member(obj, name);
 			break;
 		case 'b':
-			*(bool *)ptr = json_object_get_boolean_member(obj, name) != FALSE;
+			*(bool *)ptr = is_null ? false : json_object_get_boolean_member(obj, name);
 			break;
 		case 's':
 			g_free(*(char **)ptr);
-			*(char **)ptr = g_strdup(json_object_get_string_member(obj, name));
+			*(char **)ptr = is_null ? NULL : g_strdup(json_object_get_string_member(obj, name));
 			break;
+		case 't':
+			g_error("decoding of time from JSON object, not implemented.");
 		default:
 			assert(false);
 		}
