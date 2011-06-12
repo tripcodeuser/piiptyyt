@@ -88,12 +88,10 @@ void add_updates_to_model(
 	struct update *dedup[num_updates];
 	size_t row_count = 0;
 
-	if(model->count > 0) {
-		/* skip ignore updates that already exist in the model. */
-		for(size_t i=0; i < num_updates; i++) {
-			if(!id_in_model(model, updates[i]->id)) {
-				dedup[row_count++] = updates[i];
-			}
+	/* ignore updates whose IDs already exist in the model. */
+	for(size_t i=0; i < num_updates; i++) {
+		if(model->count == 0 || !id_in_model(model, updates[i]->id)) {
+			dedup[row_count++] = updates[i];
 		}
 	}
 
