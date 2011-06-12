@@ -28,7 +28,7 @@ PtUpdate *pt_update_new(void) {
 }
 
 
-PtUpdate *update_new_from_json(
+PtUpdate *pt_update_new_from_json(
 	JsonObject *obj,
 	struct user_cache *uc,
 	GError **err_p)
@@ -69,7 +69,9 @@ static void pt_update_dispose(GObject *object)
 		u->user = NULL;
 	}
 
-	G_OBJECT_CLASS(PT_UPDATE_GET_CLASS(u))->dispose(object);
+	GObjectClass *parent_class = g_type_class_peek_parent(
+		PT_UPDATE_GET_CLASS(u));
+	parent_class->dispose(object);
 }
 
 
@@ -84,7 +86,9 @@ static void pt_update_finalize(GObject *object)
 	g_free(u->text);
 	g_free(u);
 
-	G_OBJECT_CLASS(PT_UPDATE_GET_CLASS(u))->finalize(object);
+	GObjectClass *parent_class = g_type_class_peek_parent(
+		PT_UPDATE_GET_CLASS(u));
+	parent_class->finalize(object);
 }
 
 
