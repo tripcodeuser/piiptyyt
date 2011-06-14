@@ -30,17 +30,6 @@ struct user_cache
 };
 
 
-static const struct field_desc user_info_fields[] = {
-	SQL_FIELD(struct user_info, 's', longname, "name", "longname"),
-	SQL_FIELD(struct user_info, 's', screenname, "screen_name", "screenname"),
-	FLD(struct user_info, 's', profile_image_url),
-	FLD(struct user_info, 'b', protected),
-	FLD(struct user_info, 'b', verified),
-	FLD(struct user_info, 'b', following),
-	FLD(struct user_info, 'I', id),
-};
-
-
 /* used by functions serving user_info_cache */
 static struct user_cache *current_cache;
 
@@ -73,8 +62,9 @@ static struct user_info *fetch_user_info(
 	if(n == SQLITE_ROW) {
 		u = pt_user_info_new();
 		u->id = userid;
-		format_from_sqlite(u, stmt, user_info_fields,
-			G_N_ELEMENTS(user_info_fields));
+		int num_fs = 0;
+		const struct field_desc *fs = pt_user_info_get_field_desc(&num_fs);
+		format_from_sqlite(u, stmt, fs, num_fs);
 	} else if(n == SQLITE_DONE) {
 		/* not found. */
 		u = NULL;
@@ -132,10 +122,12 @@ static bool flush_user_info(
 	const struct user_info *ui,
 	GError **err_p)
 {
+	int n_fields = 0;
+	const struct field_desc *user_info_fields = pt_user_info_get_field_desc(
+		&n_fields);
 	if(!do_sql(c->db, "BEGIN", err_p)
 		|| !store_to_sqlite(c->db, "cached_user_info", "id", ui->id, NULL,
-				ui, user_info_fields, G_N_ELEMENTS(user_info_fields),
-				err_p)
+				ui, user_info_fields, n_fields, err_p)
 		|| !do_sql(c->db, "COMMIT", err_p))
 	{
 		do_sql(c->db, "ROLLBACK", NULL);
@@ -159,6 +151,9 @@ static void user_info_free(struct user_info *ui)
 		g_error_free(err);
 		/* it's only a cache. proceed. */
 	}
+
+	ui->dirty = false;
+	ui->cache_parent = NULL;
 
 	g_object_unref(ui);
 }
@@ -299,12 +294,15 @@ struct user_info *user_info_get_from_json(
 	struct user_info *ui = g_cache_insert(c->user_info_cache, key);
 	bool bare = (ui->screenname == NULL);
 	bool changed = true;	/* TODO: hunt */
-	if(!format_from_json(ui, obj, user_info_fields,
-		G_N_ELEMENTS(user_info_fields), NULL))
-	{
-		/* FIXME: this may leave *ui in a halfway state. fix this by making
-		 * format_from_json() atomic on error.
-		 */
+	GError *err = NULL;
+	/* FIXME: on failure pt_user_info_from_json() may leave *ui in a halfway
+	 * state. really what should be done is deserialize into a distinct object
+	 * and copy changed values one at a time, returning number of such fields.
+	 */
+	if(!pt_user_info_from_json(ui, obj, &err)) {
+		g_warning("%s: parsing user info json: %s", __func__, err->message);
+		g_error_free(err);
+
 		current_cache = c;
 		g_cache_remove(c->user_info_cache, ui);
 		ui = NULL;

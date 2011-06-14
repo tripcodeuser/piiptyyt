@@ -15,11 +15,12 @@ PtUserInfo *pt_user_info_new(void) {
 }
 
 
-PtUserInfo *pt_user_info_new_from_json(JsonObject *obj)
+bool pt_user_info_from_json(PtUserInfo *ui, JsonObject *obj, GError **err_p)
 {
-	PtUserInfo *self = pt_user_info_new();
-	/* TODO: call format_from_json() */
-	return self;
+	int num_fields = 0;
+	const struct field_desc *fields = pt_user_info_get_field_desc(
+		&num_fields);
+	return format_from_json(ui, obj, fields, num_fields, err_p);
 }
 
 
@@ -27,6 +28,23 @@ GdkPixbuf *pt_user_info_get_userpic(PtUserInfo *self)
 {
 	/* TODO: access the userpic cache */
 	return NULL;
+}
+
+
+const struct field_desc *pt_user_info_get_field_desc(int *count_p)
+{
+	static const struct field_desc fields[] = {
+		SQL_FIELD(struct user_info, 's', longname, "name", "longname"),
+		SQL_FIELD(struct user_info, 's', screenname, "screen_name", "screenname"),
+		FLD(struct user_info, 's', profile_image_url),
+		FLD(struct user_info, 'b', protected),
+		FLD(struct user_info, 'b', verified),
+		FLD(struct user_info, 'b', following),
+		FLD(struct user_info, 'I', id),
+	};
+
+	*count_p = G_N_ELEMENTS(fields);
+	return fields;
 }
 
 

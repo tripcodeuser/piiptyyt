@@ -10,6 +10,8 @@
 #include <gtk/gtk.h>
 #include <json-glib/json-glib.h>
 
+#include "defs.h"
+
 
 #define PT_USER_INFO_TYPE (pt_user_info_get_type())
 #define PT_USER_INFO(obj) (G_TYPE_CHECK_INSTANCE_CAST((obj), PT_USER_INFO_TYPE, PtUserInfo))
@@ -54,10 +56,17 @@ struct _pt_user_info_class
 /* returns a borrowed GdkPixbuf reference, or NULL when it's not available. */
 extern GdkPixbuf *pt_user_info_get_userpic(struct user_info *info);
 
-/* for usercache.c, and for dummy objects possibly */
+extern const struct field_desc *pt_user_info_get_field_desc(int *count_p);
 
+/* for usercache.c, and for dummy objects possibly */
 extern PtUserInfo *pt_user_info_new(void);
-extern PtUserInfo *pt_user_info_new_from_json(JsonObject *obj);
+
+/* returns `false', errors on failure. */
+extern bool pt_user_info_from_json(
+	PtUserInfo *ui,
+	JsonObject *obj,
+	GError **err_p);
+
 
 extern GType pt_user_info_get_type(void);
 
