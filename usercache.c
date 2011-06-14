@@ -13,6 +13,7 @@
 #include <json-glib/json-glib.h>
 
 #include "defs.h"
+#include "pt-user-info.h"
 
 
 /* this caching mechanism's replacement policy is far too eager considering
@@ -68,9 +69,9 @@ static struct user_info *fetch_user_info(
 
 	sqlite3_bind_int64(stmt, 0, userid);
 	n = sqlite3_step(stmt);
-	struct user_info *u;
+	PtUserInfo *u;
 	if(n == SQLITE_ROW) {
-		u = g_new0(struct user_info, 1);
+		u = pt_user_info_new();
 		u->id = userid;
 		format_from_sqlite(u, stmt, user_info_fields,
 			G_N_ELEMENTS(user_info_fields));
@@ -103,7 +104,7 @@ static gpointer user_info_fetch_or_new(gpointer keyptr)
 	struct user_info *ui = fetch_user_info(c, key, NULL);
 	if(ui == NULL) {
 		/* make up a "that's all" record */
-		ui = g_new0(struct user_info, 1);
+		ui = pt_user_info_new();
 		ui->id = key;
 		ui->cache_parent = c;
 		ui->dirty = false;
@@ -159,11 +160,7 @@ static void user_info_free(struct user_info *ui)
 		/* it's only a cache. proceed. */
 	}
 
-	g_free(ui->longname);
-	g_free(ui->screenname);
-	g_free(ui->profile_image_url);
-	g_free(ui->cached_img_name);
-	g_free(ui);
+	g_object_unref(ui);
 }
 
 

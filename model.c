@@ -8,6 +8,7 @@
 
 #include "defs.h"
 #include "pt-update.h"
+#include "pt-user-info.h"
 
 
 #define id_in_model(m, id) (find_id_in_model((m), (id)) != NULL)
@@ -177,7 +178,7 @@ static void set_display_pic_column_from_pt_update(
 	GdkPixbuf *upd_pic = NULL;
 	if(update->user != NULL && update->user->screenname != NULL) {
 		/* FIXME: differentiate between forwarder and originator */
-		upd_pic = user_info_get_userpic(update->user);
+		upd_pic = pt_user_info_get_userpic(update->user);
 	}
 
 	if(upd_pic == NULL) {

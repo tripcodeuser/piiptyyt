@@ -51,27 +51,9 @@ struct field_desc
 
 
 struct user_cache;
-struct update;
 
-/* an empty user_info occurs when the client has only seen a trimmed user JSON
- * object. those can be recognized by ->screenname == NULL.
- */
-struct user_info
-{
-	uint64_t id;
-	char *longname, *screenname;
-	char *profile_image_url;
-	bool protected, verified, following;
-
-	/* not from JSON, but in database */
-	char *cached_img_name;
-	time_t cached_img_expires;
-
-	/* non-database, non-json fields */
-	struct user_cache *cache_parent;
-	bool dirty;		/* sync to database on destroy? */
-};
-
+struct update;			/* in "pt-update.h" */
+struct user_info;		/* in "pt-user-info.h" */
 
 /* update display data model.
  *
@@ -118,13 +100,13 @@ extern void user_cache_close(struct user_cache *uc);
 extern struct user_info *user_info_get(
 	struct user_cache *uc,
 	uint64_t id);
+/* TODO: add flag to control updating when already found, and given a full
+ * record
+ */
 extern struct user_info *user_info_get_from_json(
 	struct user_cache *uc,
 	JsonObject *userinfo_obj);
 extern void user_info_put(struct user_info *info);
-
-/* gets a GdkPixbuf reference, or returns NULL when it's not available. */
-extern GdkPixbuf *user_info_get_userpic(struct user_info *info);
 
 
 /* from state.c */

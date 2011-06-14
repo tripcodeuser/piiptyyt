@@ -25,8 +25,8 @@ tags: $(wildcard *.[ch])
 	@ctags -R .
 
 
-piiptyyt: main.o state.o login.o oauth.o pt-update.o usercache.o format.o \
-		model.o
+piiptyyt: main.o state.o login.o oauth.o usercache.o format.o \
+		model.o pt-update.o pt-user-info.o
 	@echo " LD $@"
 	@$(CC) -o $@ $^ $(CFLAGS) $(LDFLAGS) $(LIBS)
 
