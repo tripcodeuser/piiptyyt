@@ -19,6 +19,7 @@ clean:
 
 distclean: clean
 	rm -f $(TARGETS)
+	@rm -rf .deps
 
 tags: $(wildcard *.[ch])
 	@ctags -R .
@@ -32,16 +33,11 @@ piiptyyt: main.o state.o login.o oauth.o pt-update.o usercache.o format.o \
 
 %.o: %.c
 	@echo " CC $@"
-	@$(CC) -c -o $@ $< $(CFLAGS)
+	@test -d .deps || mkdir -p .deps
+	@$(CC) -c -o $@ $< $(CFLAGS) -MMD -MF .deps/$(<:.c=.d)
+
+.deps:
+	@mkdir -p .deps
 
 
-# FIXME: add auto dependency generation, collection
-# (or just move shit over to automake, idgaf)
-main.o: main.c defs.h pt-update.h
-state.o: state.c defs.h
-login.o: login.c defs.h
-oauth.o: oauth.c defs.h
-pt-update.o: pt-update.c pt-update.h defs.h
-usercache.o: usercache.c defs.h
-format.o: format.c defs.h
-model.o: model.c defs.h pt-update.h
+include $(wildcard .deps/*)
