@@ -88,7 +88,7 @@ struct update_model
 	uint64_t *current_ids;	/* largest first, always sorted */
 	GtkListStore *store;
 	GtkTreeView *view;
-	GtkCellRenderer *update_col_r;
+	GtkCellRenderer *update_col_r, *pic_col_r;
 };
 
 
@@ -122,6 +122,9 @@ extern struct user_info *user_info_get_from_json(
 	struct user_cache *uc,
 	JsonObject *userinfo_obj);
 extern void user_info_put(struct user_info *info);
+
+/* gets a GdkPixbuf reference, or returns NULL when it's not available. */
+extern GdkPixbuf *user_info_get_userpic(struct user_info *info);
 
 
 /* from state.c */

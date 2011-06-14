@@ -2,6 +2,7 @@
 #include <stddef.h>
 #include <assert.h>
 #include <glib.h>
+#include <gtk/gtk.h>
 #include <json-glib/json-glib.h>
 
 #include "defs.h"
@@ -123,12 +124,12 @@ static void pt_update_class_init(PtUpdateClass *klass)
 	obj_class->dispose = &pt_update_dispose;
 	obj_class->get_property = &pt_update_get_property;
 
-	GParamSpec *pspec = g_param_spec_string("markup",
-		"Pango markup for update's content",
-		"Get markup text",
-		"",
-		G_PARAM_READABLE | G_PARAM_STATIC_STRINGS);
-	g_object_class_install_property(obj_class, PROP_MARKUP, pspec);
+	g_object_class_install_property(obj_class, PROP_MARKUP,
+		g_param_spec_string("markup",
+			"Pango markup for update's content",
+			"Get markup text",
+			"",
+			G_PARAM_READABLE | G_PARAM_STATIC_STRINGS));
 }
 
 

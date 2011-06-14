@@ -4,8 +4,6 @@
   <!-- interface-naming-policy project-wide -->
   <object class="GtkListStore" id="tweet_model">
     <columns>
-      <!-- column-name userpic -->
-      <column type="GdkPixbuf"/>
       <!-- column-name update -->
       <column type="GObject"/>
     </columns>
@@ -120,9 +118,6 @@
                 <property name="title">userpic</property>
                 <child>
                   <object class="GtkCellRendererPixbuf" id="view_userpic_renderer"/>
-                  <attributes>
-                    <attribute name="pixbuf">0</attribute>
-                  </attributes>
                 </child>
               </object>
             </child>

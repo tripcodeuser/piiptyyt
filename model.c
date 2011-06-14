@@ -73,16 +73,6 @@ void add_updates_to_model(
 {
 	if(num_updates == 0) return;
 
-	GError *err = NULL;
-	/* TODO: load this from the user cache */
-	GdkPixbuf *av = gdk_pixbuf_new_from_file("img/tablecat.png", &err);
-	if(err != NULL) {
-		fprintf(stderr, "%s: can't read av image: %s\n", __func__,
-			err->message);
-		g_error_free(err);
-		return;
-	}
-
 	qsort(updates, num_updates, sizeof(struct update *), &sort_updates_by_id);
 
 	/* determine insert positions for these updates. */
@@ -126,14 +116,34 @@ void add_updates_to_model(
 
 	for(size_t i=0; i < row_count; i++) {
 		gtk_list_store_insert_with_values(model->store, NULL, row_pos[i],
-			0, g_object_ref(av),
-			1, g_object_ref(dedup[i]),
+			0, g_object_ref(dedup[i]),
 			-1);
 	}
 }
 
 
-static void set_markup_in_cr_from_object(
+/* returns a borrowed reference. */
+static GObject *get_object_from_model(
+	GtkTreeModel *model,
+	GtkTreeIter *iter,
+	int col_ix)
+{
+	GObject *ret;
+	GValue val = { 0 };
+	gtk_tree_model_get_value(model, iter, 0, &val);
+	if(!G_VALUE_HOLDS(&val, G_TYPE_OBJECT)) {
+		g_warning("%s: called for type `%s', not `%s'",
+			__func__, G_VALUE_TYPE_NAME(&val), g_type_name(G_TYPE_OBJECT));
+		ret = NULL;
+	} else {
+		ret = g_value_get_object(&val);
+	}
+	g_value_unset(&val);
+	return ret;
+}
+
+
+static void set_markup_column_from_pt_update(
 	GtkTreeViewColumn *col,
 	GtkCellRenderer *cell,
 	GtkTreeModel *model,
@@ -142,30 +152,64 @@ static void set_markup_in_cr_from_object(
 {
 //	struct update_model *m = dataptr;
 
-	GValue val = { 0 };
-	gtk_tree_model_get_value(model, iter, 1, &val);
-	if(!G_VALUE_HOLDS(&val, G_TYPE_OBJECT)) {
-		g_warning("%s: called for type `%s', not `%s'",
-			__func__, G_VALUE_TYPE_NAME(&val), g_type_name(G_TYPE_OBJECT));
-		goto end;
-	}
+	PtUpdate *update = PT_UPDATE(get_object_from_model(model, iter, 0));
+	g_return_if_fail(update != NULL);
 
-	GObject *obj = g_value_get_object(&val);
-	if(!PT_IS_UPDATE(obj)) {
-		g_warning("%s: called for object of type `%s', expected `%s'",
-			__func__, g_type_name(G_OBJECT_TYPE(obj)),
-			g_type_name(PT_UPDATE_TYPE));
-		goto end;
-	}
-
-	PtUpdate *update = PT_UPDATE(obj);
 	char *markup = NULL;
 	g_object_get(update, "markup", &markup, NULL);
 	g_object_set(cell, "markup", markup, NULL);
 	g_free(markup);
+}
 
-end:
-	g_value_unset(&val);
+
+static void set_display_pic_column_from_pt_update(
+	GtkTreeViewColumn *col,
+	GtkCellRenderer *cell,
+	GtkTreeModel *model,
+	GtkTreeIter *iter,
+	gpointer dataptr)
+{
+//	struct update_model *m = dataptr;
+
+	PtUpdate *update = PT_UPDATE(get_object_from_model(model, iter, 0));
+	g_return_if_fail(update != NULL);
+
+	GdkPixbuf *upd_pic = NULL;
+	if(update->user != NULL && update->user->screenname != NULL) {
+		/* FIXME: differentiate between forwarder and originator */
+		upd_pic = user_info_get_userpic(update->user);
+	}
+
+	if(upd_pic == NULL) {
+		/* TODO: come up with a default image that isn't tablecat */
+		GError *err = NULL;
+		upd_pic = gdk_pixbuf_new_from_file("img/tablecat.png", &err);
+		if(err != NULL) {
+			g_warning("%s: can't read default avatar image: %s",
+				__func__, err->message);
+			g_error_free(err);
+			return;
+		}
+	}
+
+	g_object_set(cell, "pixbuf", upd_pic, NULL);
+}
+
+
+static GtkCellRenderer *set_col_func(
+	GtkTreeView *view,
+	int col_id,
+	GtkTreeCellDataFunc fn,
+	gpointer dataptr,
+	GDestroyNotify destroyfn)
+{
+	GtkTreeViewColumn *col = gtk_tree_view_get_column(view, col_id);
+	GList *rs_list = gtk_cell_layout_get_cells(GTK_CELL_LAYOUT(col));
+	if(rs_list == NULL) return NULL;
+	GtkCellRenderer *r = GTK_CELL_RENDERER(g_list_first(rs_list)->data);
+	g_list_free(rs_list);
+	gtk_tree_view_column_set_cell_data_func(col, r, fn, dataptr, destroyfn);
+	return g_object_ref(r);
 }
 
 
@@ -179,15 +223,10 @@ struct update_model *update_model_new(
 	m->store = g_object_ref(store);
 	m->view = g_object_ref(view);
 
-	GtkTreeViewColumn *upd_column = gtk_tree_view_get_column(view, 1);
-	GList *rs_list = gtk_cell_layout_get_cells(GTK_CELL_LAYOUT(upd_column));
-	if(rs_list != NULL) {
-		m->update_col_r = g_object_ref(
-			GTK_CELL_RENDERER(g_list_first(rs_list)->data));
-		g_list_free(rs_list);
-		gtk_tree_view_column_set_cell_data_func(upd_column,
-			m->update_col_r, &set_markup_in_cr_from_object, m, NULL);
-	}
+	m->pic_col_r = set_col_func(view, 0,
+		&set_display_pic_column_from_pt_update, m, NULL);
+	m->update_col_r = set_col_func(view, 1,
+		&set_markup_column_from_pt_update, m, NULL);
 
 	return m;
 }
@@ -198,6 +237,7 @@ void update_model_free(struct update_model *model)
 	g_object_unref(model->store);
 	g_object_unref(model->view);
 	g_object_unref(model->update_col_r);
+	g_object_unref(model->pic_col_r);
 	g_free(model->current_ids);
 	g_free(model);
 }

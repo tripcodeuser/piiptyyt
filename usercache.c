@@ -7,6 +7,8 @@
 #include <assert.h>
 #include <errno.h>
 #include <glib.h>
+#include <glib-object.h>
+#include <gtk/gtk.h>
 #include <sqlite3.h>
 #include <json-glib/json-glib.h>
 
@@ -323,4 +325,11 @@ void user_info_put(struct user_info *ui)
 
 	current_cache = ui->cache_parent;
 	g_cache_remove(ui->cache_parent->user_info_cache, ui);
+}
+
+
+GdkPixbuf *user_info_get_userpic(struct user_info *ui)
+{
+	/* TODO: implement (once struct user_info becomes PtUserInfo) */
+	return NULL;
 }

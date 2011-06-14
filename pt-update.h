@@ -24,10 +24,14 @@ typedef struct _pt_update_class PtUpdateClass;
 
 /* the almighty "update", also known as a "tweet" or "status".
  *
- * this structure is a candidate for making into a GObject, for things such as
- * early display of updates that're in reply to uids or sids that the client
- * doesn't remember; a signal would be popped once the contents have settled
- * due to a http transaction completing or data coming down the wire.
+ * the user info referenced by in_rep_to_uid may not be available in the user
+ * cache, and in_rep_to_sid may refer to a status the client has not seen.
+ *
+ * TODO: this structure should have a "changed" signal for when a missing
+ * userpic is loaded, or when such an image changes for some other reason.
+ *
+ * properties:
+ * - "markup" (string, ro)
  */
 struct update
 {
@@ -41,6 +45,11 @@ struct update
 	char *source;	/* "web", "piiptyyt", etc (should be a local source id) */
 	char *text;				/* UTF-8 */
 
+	/* TODO: user_info should also be a GObject that has an "userpic"
+	 * property. this would be picked up by a column function in model.c,
+	 * and set by the "add stuff to model" mechanism according to whether the
+	 * update is a forward or not.
+	 */
 	struct user_info *user;
 };
 
@@ -59,5 +68,18 @@ extern PtUpdate *pt_update_new_from_json(
 	struct user_cache *uc,
 	GError **err_p);
 
+/* get the GdkPixbuf representing the avatar picture to be displayed next to
+ * this update. for forwarded updates ("retweets"), returns the originator's
+ * userpic and not the re-sender's.
+ *
+ * if the userpic is not (yet) available, returns NULL. return value is owned
+ * by caller.
+ */
+extern GdkPixbuf *pt_update_get_display_user_pic(PtUpdate *update);
+
+/* as above, but always returns a reference to the re-sender's userpic even
+ * for forwards.
+ */
+extern GdkPixbuf *pt_update_get_sender_user_pic(PtUpdate *update);
 
 #endif
