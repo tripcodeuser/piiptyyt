@@ -1,5 +1,6 @@
 
 #include <stddef.h>
+#include <string.h>
 #include <assert.h>
 #include <glib.h>
 #include <gtk/gtk.h>
@@ -7,10 +8,18 @@
 
 #include "defs.h"
 #include "pt-update.h"
+#include "pt-user-info.h"
 
 
 enum prop_names {
 	PROP_MARKUP = 1,
+};
+
+
+struct source_uri_data
+{
+	char **uri;
+	GString *text;
 };
 
 
@@ -27,6 +36,85 @@ static const struct field_desc update_fields[] = {
 	UFS('s', source),
 	UFS('S', text),
 };
+
+
+static void source_uri_element(
+	GMarkupParseContext *ctx,
+	const char *element,
+	const char **attr_names,
+	const char **attr_vals,
+	gpointer dataptr,
+	GError **err_p)
+{
+	struct source_uri_data *dat = dataptr;
+
+	if(strcmp(element, "a") != 0) {
+		g_debug("saw element `%s', which is not understood in \"source\"",
+			element);
+		return;
+	}
+
+	const char *rel = NULL, *href = NULL;
+	for(int i=0; attr_names[i] != NULL; i++) {
+		if(strcmp(attr_names[i], "rel") == 0) rel = attr_vals[i];
+		else if(strcmp(attr_names[i], "href") == 0) href = attr_vals[i];
+		else {
+			g_debug("unknown attribute for `a': `%s'", attr_names[i]);
+		}
+	}
+	if(strcmp(rel, "nofollow") != 0) {
+		g_debug("unknown value for `a#rel': `%s'", rel);
+	}
+	g_free(*dat->uri);
+	*dat->uri = g_strdup(href);
+}
+
+
+static void source_uri_text(
+	GMarkupParseContext *ctx,
+	const char *text,
+	gsize text_len,
+	gpointer dataptr,
+	GError **err_p)
+{
+	struct source_uri_data *dat = dataptr;
+	g_string_append_len(dat->text, text, text_len);
+}
+
+
+static bool separate_source_uri(
+	char **source_uri,
+	char **source_text,
+	const char *source,
+	GError **err_p)
+{
+	static const GMarkupParser parser = {
+		.start_element = &source_uri_element,
+		.text = &source_uri_text,
+	};
+	struct source_uri_data dat = {
+		.uri = source_uri,
+		.text = g_string_sized_new(128),
+	};
+	GMarkupParseContext *ctx = g_markup_parse_context_new(&parser,
+		G_MARKUP_TREAT_CDATA_AS_TEXT | G_MARKUP_PREFIX_ERROR_POSITION,
+		&dat, NULL);
+
+	gboolean ok = g_markup_parse_context_parse(ctx, source, strlen(source),
+		err_p);
+	if(ok) {
+		ok = g_markup_parse_context_end_parse(ctx, err_p);
+	}
+
+	g_markup_parse_context_free(ctx);
+	if(ok) {
+		*source_text = g_string_free(dat.text, FALSE);
+		return true;
+	} else {
+		g_string_free(dat.text, TRUE);
+		return false;
+	}
+}
 
 
 PtUpdate *pt_update_new(void) {
@@ -50,6 +138,21 @@ PtUpdate *pt_update_new_from_json(
 		if(user != NULL) u->user = user_info_get_from_json(uc, user);
 	}
 
+	if(strchr(u->source, '<') != NULL) {
+		/* the "source" string may be in XML. separate the URI and content. */
+		char *source_uri = NULL, *source_text = NULL;
+		GError *err = NULL;
+		if(separate_source_uri(&source_uri, &source_text, u->source, &err)) {
+			g_free(source_uri);
+			g_free(u->source);
+			u->source = source_text;
+		} else {
+			g_debug("failed to parse source `%s': %s", u->source,
+				err->message);
+			g_error_free(err);
+		}
+	}
+
 	assert(u != NULL || err_p == NULL || *err_p != NULL);
 	return u;
 }
@@ -63,10 +166,21 @@ static void pt_update_get_property(
 {
 	PtUpdate *self = PT_UPDATE(object);
 	switch(prop_id) {
-	case PROP_MARKUP:
-		/* TODO */
-		g_value_set_string(value, self->text);
+	case PROP_MARKUP: {
+		const char *username;
+		if(self->user == NULL || self->user->screenname == NULL) {
+			username = "[tanasinn]";
+		} else {
+			username = self->user->screenname;
+		}
+		const char *time_sent = "(somewhen)";
+		g_value_take_string(value,
+			g_markup_printf_escaped(
+				"<b>%s</b> %s\n"
+				"<span size=\"smaller\" fgcolor=\"grey\">%s from %s</span>",
+				username, self->text, time_sent, self->source));
 		break;
+		}
 	default:
 		G_OBJECT_WARN_INVALID_PROPERTY_ID(object, prop_id, spec);
 		break;
