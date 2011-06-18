@@ -124,7 +124,7 @@ static char *query_pin(GtkBuilder *builder)
 	gtk_widget_show_all(GTK_WIDGET(pin_wnd));
 	gtk_dialog_run(pin_wnd);
 
-	gtk_widget_hide_all(GTK_WIDGET(pin_wnd));
+	gtk_widget_hide(GTK_WIDGET(pin_wnd));
 	char *ret;
 	if(pin_ctx->done
 		&& gtk_dialog_get_widget_for_response(pin_wnd, pin_ctx->response)
