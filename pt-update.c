@@ -35,6 +35,7 @@ static const struct field_desc update_fields[] = {
 	UF('s', in_rep_to_screen_name, "in_reply_to_screen_name"),
 	UFS('s', source),
 	UFS('S', text),
+	UF('T', timestamp, "created_at"),
 };
 
 
@@ -181,12 +182,15 @@ static void pt_update_get_property(
 		} else {
 			username = self->user->screenname;
 		}
-		const char *time_sent = "(somewhen)";
+		GDateTime *local = g_date_time_to_local(self->timestamp);
+		char *time_sent = g_date_time_format(local, "%F %H:%M");
+		g_date_time_unref(local);
 		g_value_take_string(value,
 			g_markup_printf_escaped(
 				"<b>%s</b> %s\n"
 				"<span size=\"smaller\" fgcolor=\"grey\">%s from %s</span>",
 				username, self->text, time_sent, self->source));
+		g_free(time_sent);
 		break;
 		}
 	default:
@@ -215,6 +219,7 @@ static void pt_update_dispose(GObject *object)
 		user_info_put(u->user);
 		u->user = NULL;
 	}
+	g_date_time_unref(u->timestamp);
 
 	GObjectClass *parent_class = g_type_class_peek_parent(
 		PT_UPDATE_GET_CLASS(u));

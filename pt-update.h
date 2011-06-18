@@ -44,6 +44,7 @@ struct update
 	char *in_rep_to_screen_name;
 	const char *source;		/* "web", "piiptyyt", etc */
 	char *text;				/* UTF-8 */
+	GDateTime *timestamp;
 
 	/* TODO: user_info should also be a GObject that has an "userpic"
 	 * property. this would be picked up by a column function in model.c,
