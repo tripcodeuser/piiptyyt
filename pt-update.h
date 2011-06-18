@@ -42,7 +42,7 @@ struct update
 	uint64_t in_rep_to_uid;	/* 0 when not a reply */
 	uint64_t in_rep_to_sid;	/* status id, or -''- */
 	char *in_rep_to_screen_name;
-	char *source;	/* "web", "piiptyyt", etc (should be a local source id) */
+	const char *source;		/* "web", "piiptyyt", etc */
 	char *text;				/* UTF-8 */
 
 	/* TODO: user_info should also be a GObject that has an "userpic"
@@ -57,6 +57,8 @@ struct update
 struct _pt_update_class
 {
 	GObjectClass parent_class;
+	/* with g_string_chunk_insert_const(): values for PtUpdate->source. */
+	GStringChunk *source_chunk;
 };
 
 

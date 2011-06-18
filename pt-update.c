@@ -138,20 +138,28 @@ PtUpdate *pt_update_new_from_json(
 		if(user != NULL) u->user = user_info_get_from_json(uc, user);
 	}
 
+	char *new_src = NULL;
 	if(strchr(u->source, '<') != NULL) {
 		/* the "source" string may be in XML. separate the URI and content. */
-		char *source_uri = NULL, *source_text = NULL;
+		char *source_uri = NULL;
 		GError *err = NULL;
-		if(separate_source_uri(&source_uri, &source_text, u->source, &err)) {
-			g_free(source_uri);
-			g_free(u->source);
-			u->source = source_text;
+		if(separate_source_uri(&source_uri, &new_src, u->source, &err)) {
+			g_free(source_uri);		/* not kept. */
 		} else {
 			g_debug("failed to parse source `%s': %s", u->source,
 				err->message);
 			g_error_free(err);
 		}
 	}
+	if(new_src == NULL) new_src = g_strdup(u->source);
+	/* special: format_from_json() insists on duplicating strings into the
+	 * structure, but u->source is declared pointer to const. this is the sane
+	 * thing to do.
+	 */
+	g_free((void *)u->source);
+	PtUpdateClass *klass = PT_UPDATE_GET_CLASS(u);
+	u->source = g_string_chunk_insert_const(klass->source_chunk, new_src);
+	g_free(new_src);
 
 	assert(u != NULL || err_p == NULL || *err_p != NULL);
 	return u;
@@ -221,7 +229,6 @@ static void pt_update_finalize(GObject *object)
 
 	/* TODO: use a format_free() call to drop the strings? */
 	g_free(u->in_rep_to_screen_name);
-	g_free(u->source);
 	g_free(u->text);
 
 	GObjectClass *parent_class = g_type_class_peek_parent(
@@ -232,6 +239,8 @@ static void pt_update_finalize(GObject *object)
 
 static void pt_update_class_init(PtUpdateClass *klass)
 {
+	klass->source_chunk = g_string_chunk_new(512);
+
 	GObjectClass *obj_class = G_OBJECT_CLASS(klass);
 
 	obj_class->finalize = &pt_update_finalize;
