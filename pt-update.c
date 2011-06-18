@@ -167,6 +167,27 @@ PtUpdate *pt_update_new_from_json(
 }
 
 
+static char *pt_update_generate_markup(PtUpdate *self)
+{
+	const char *username;
+	if(self->user == NULL || self->user->screenname == NULL) {
+		username = "[tanasinn]";
+	} else {
+		username = self->user->screenname;
+	}
+
+	GDateTime *local = g_date_time_to_local(self->timestamp);
+	char *time_sent = g_date_time_format(local, "%F %H:%M");
+	char *ret = g_markup_printf_escaped(
+		"<b>%s</b> %s\n"
+		"<span size=\"smaller\" fgcolor=\"grey\">%s from %s</span>",
+		username, self->text, time_sent, self->source);
+	g_free(time_sent);
+	g_date_time_unref(local);
+	return ret;
+}
+
+
 static void pt_update_get_property(
 	GObject *object,
 	guint prop_id,
@@ -175,24 +196,12 @@ static void pt_update_get_property(
 {
 	PtUpdate *self = PT_UPDATE(object);
 	switch(prop_id) {
-	case PROP_MARKUP: {
-		const char *username;
-		if(self->user == NULL || self->user->screenname == NULL) {
-			username = "[tanasinn]";
-		} else {
-			username = self->user->screenname;
+	case PROP_MARKUP:
+		if(self->markup_cache == NULL) {
+			self->markup_cache = pt_update_generate_markup(self);
 		}
-		GDateTime *local = g_date_time_to_local(self->timestamp);
-		char *time_sent = g_date_time_format(local, "%F %H:%M");
-		g_date_time_unref(local);
-		g_value_take_string(value,
-			g_markup_printf_escaped(
-				"<b>%s</b> %s\n"
-				"<span size=\"smaller\" fgcolor=\"grey\">%s from %s</span>",
-				username, self->text, time_sent, self->source));
-		g_free(time_sent);
+		g_value_set_string(value, self->markup_cache);
 		break;
-		}
 	default:
 		G_OBJECT_WARN_INVALID_PROPERTY_ID(object, prop_id, spec);
 		break;
@@ -207,6 +216,7 @@ static void pt_update_init(PtUpdate *self)
 	self->source = NULL;
 	self->text = NULL;
 	self->user = NULL;
+	self->markup_cache = NULL;
 }
 
 
@@ -235,6 +245,7 @@ static void pt_update_finalize(GObject *object)
 	/* TODO: use a format_free() call to drop the strings? */
 	g_free(u->in_rep_to_screen_name);
 	g_free(u->text);
+	g_free(u->markup_cache);
 
 	GObjectClass *parent_class = g_type_class_peek_parent(
 		PT_UPDATE_GET_CLASS(u));

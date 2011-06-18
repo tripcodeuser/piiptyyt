@@ -52,6 +52,8 @@ struct update
 	 * update is a forward or not.
 	 */
 	struct user_info *user;
+
+	char *markup_cache;
 };
 
 
