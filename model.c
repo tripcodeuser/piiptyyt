@@ -194,6 +194,7 @@ static void set_display_pic_column_from_pt_update(
 	}
 
 	g_object_set(cell, "pixbuf", upd_pic, NULL);
+	g_object_unref(upd_pic);
 }
 
 
