@@ -6,6 +6,7 @@
 #include <assert.h>
 #include <unistd.h>
 #include <errno.h>
+#include <time.h>
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <glib.h>
@@ -142,30 +143,16 @@ static char *query_pin(GtkBuilder *builder)
 }
 
 
-static int launch_authorization_browser(const char *req_token)
+static bool launch_authorization_browser(
+	const char *req_token,
+	GError **err_p)
 {
-	pid_t child = fork();
-	if(child == 0) {
-		const char *auth_uri = "https://api.twitter.com/oauth/authorize";
-		char *browser_uri = g_strdup_printf("%s?oauth_token=%s", auth_uri,
-			req_token);
-		char *argv[] = { "x-www-browser", browser_uri, NULL };
-		execvp(argv[0], argv);
-		fprintf(stderr, "failed to launch www browser: %s\n",
-			strerror(errno));
-		exit(EXIT_FAILURE);
-	} else {
-		/* clean up after. */
-		int status = 0;
-		pid_t p = waitpid(child, &status, 0);
-		if(p == (pid_t)-1) {
-			fprintf(stderr, "waitpid(2) failed: %s\n", strerror(errno));
-			/* FIXME: what now? */
-			return EXIT_FAILURE;
-		} else {
-			return WIFEXITED(status) ? WEXITSTATUS(status) : EXIT_FAILURE;
-		}
-	}
+	const char *auth_uri = "https://api.twitter.com/oauth/authorize";
+	char *browser_uri = g_strdup_printf("%s?oauth_token=%s", auth_uri,
+		req_token);
+	gboolean ok = gtk_show_uri(NULL, browser_uri, time(NULL), err_p);
+	g_free(browser_uri);
+	return ok != FALSE;
 }
 
 
@@ -220,9 +207,11 @@ bool oauth_login(
 	/* do out-of-band OAuth */
 	const char *req_token = rt_output[0], *req_secret = rt_output[1];
 #if !USE_LOCAL_CGI
-	int rc = launch_authorization_browser(req_token);
-	if(rc != EXIT_SUCCESS) {
-		fprintf(stderr, "warning: browser launching failed.\n");
+	GError *err = NULL;
+	if(!launch_authorization_browser(req_token, &err)) {
+		fprintf(stderr, "warning: browser launching failed: %s\n",
+			err->message);
+		g_error_free(err);
 	}
 #endif
 
