@@ -11,6 +11,61 @@
 #include "defs.h"
 
 
+static int parse_month(const char *str)
+{
+	int len = strlen(str);
+	char tmp[len + 1];
+	for(int i=0; i < len; i++) tmp[i] = tolower(str[i]);
+	tmp[len] = '\0';
+
+	static const char *names[] = {
+		[1] = "jan", [2] = "feb", [3] = "mar", [4] = "apr",
+		[5] = "may", [6] = "jun", [7] = "jul", [8] = "aug",
+		[9] = "sep", [10] = "oct", [11] = "nov", [12] = "dec",
+	};
+	for(int i=1; i<=12; i++) {
+		if(strcmp(tmp, names[i]) == 0) return i;
+	}
+	return -1;
+}
+
+
+static GDateTime *parse_datetime(const char *str)
+{
+	if(str == NULL) return NULL;
+
+	GDateTime *ret = NULL;
+	char **bits = g_strsplit(str, " ", -1);
+	int num_bits = g_strv_length(bits);
+	if(num_bits < 6) {
+		g_debug("num_bits for `%s' isn't valid; format unknown", str);
+		goto fail;
+	}
+
+	/* #0 is day-of-week in english. that's skipped. */
+	int month = parse_month(bits[1]);
+	if(month <= 0) goto fail;
+	int day = atoi(bits[2]);
+	if(day == 0) goto fail;
+	int hour, min, sec;
+	if(sscanf(bits[3], "%d:%d:%d", &hour, &min, &sec) != 3) goto fail;
+	int year = atoi(bits[5]);
+	if(year < 0) goto fail;
+	GTimeZone *tz = g_time_zone_new(bits[4]);
+	if(tz == NULL) goto fail;
+
+	ret = g_date_time_new(tz, year, month, day, hour, min, sec);
+	g_time_zone_unref(tz);
+	if(ret == NULL) {
+		g_debug("couldn't make a new timestamp");
+	}
+
+fail:
+	g_strfreev(bits);
+	return ret;
+}
+
+
 /* FIXME: an error exit at field i leaves fields [0..i) modified. */
 bool format_from_json(
 	void *dest,
@@ -46,10 +101,15 @@ bool format_from_json(
 			g_free(*(char **)ptr);
 			*(char **)ptr = is_null ? NULL : g_strdup(json_object_get_string_member(obj, name));
 			break;
-		case 't':
-			g_set_error(err_p, 0, 0,
-				"decoding of time from JSON object, not implemented.");
-			return false;
+		case 't': {
+			GDateTime **dt_p = ptr;
+			if(*dt_p != NULL) {
+				g_date_time_unref(*dt_p);
+				*dt_p = NULL;
+			}
+			*dt_p = parse_datetime(json_object_get_string_member(obj, name));
+			break;
+			}
 		default:
 			assert(false);
 		}

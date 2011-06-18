@@ -31,7 +31,8 @@ struct piiptyyt_state
  * 's' for string (default NULL)
  * 'i' for int64_t (default 0)
  * 'b' for bool (default false)
- * 't' for time_t, formatted as a standard UTC timestamp (default 1 jan 1970)
+ * 't' for GDateTime *, formatted as a standard UTC timestamp (default 1 jan
+ * 1970)
  *
  * capitalize letters to pop an error on NULL input, or to disallow storing of
  * NULL strings to sqlite. default values may appear where NULL is allowed.
