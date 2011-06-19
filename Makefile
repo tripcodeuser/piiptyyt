@@ -1,25 +1,23 @@
 
-PKGS=gtk+-x11-3.0 libsoup-2.4 json-glib-1.0 sqlite3
+include config.mk
 
-CFLAGS:=-std=gnu99 -Wall -O1 -g -I . -I ccan \
-	$(shell pkg-config --cflags $(PKGS)) $(shell libgcrypt-config --cflags)
-LDFLAGS=
-LIBS:=$(shell pkg-config --libs $(PKGS)) -lgnutls \
-	$(shell libgcrypt-config --libs)
+TARGETS=piiptyyt test/testmain tags
 
-TARGETS=piiptyyt tags
-
-.PHONY: all clean distclean
+.PHONY: all clean distclean check
 
 
 all: $(TARGETS)
 
 clean:
-	rm -f *.o
+	rm -f *.o test/*.o
 
 distclean: clean
 	rm -f $(TARGETS)
 	@rm -rf .deps
+
+check: test/testmain
+	test/testmain
+
 
 tags: $(wildcard *.[ch])
 	@ctags -R .
@@ -32,13 +30,8 @@ piiptyyt: main.o state.o login.o oauth.o usercache.o format.o \
 	@$(CC) -o $@ $^ $(CFLAGS) $(LDFLAGS) $(LIBS)
 
 
-%.o: %.c
-	@echo " CC $@"
-	@test -d .deps || mkdir -p .deps
-	@$(CC) -c -o $@ $< $(CFLAGS) -MMD -MF .deps/$(<:.c=.d)
-
-.deps:
-	@mkdir -p .deps
-
+test/testmain: test/testmain.o test/pt_cache_suite.o pt-cache.o
+	@echo " LD $@"
+	@$(CC) -o $@ $^ $(CFLAGS) $(LDFLAGS) $(LIBS) -lcheck
 
 include $(wildcard .deps/*)

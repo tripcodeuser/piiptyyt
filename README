@@ -14,3 +14,7 @@ the usual C compilers and linkers etc.):
   - libgnutls-dev
   - libjson-glib-dev
   - libsqlite3-dev
+
+To compile and run the unit test suite, install the following Debian pcakages:
+
+  - check
