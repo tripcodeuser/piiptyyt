@@ -46,6 +46,13 @@ static char *cached_userpic_name(PtUserInfo *self)
 }
 
 
+static char *cached_userpic_path(const char *name)
+{
+	return g_build_filename(g_get_user_cache_dir(),
+		"piiptyyt", "userpic", name, NULL);
+}
+
+
 static void img_fetch_callback(
 	SoupSession *session,
 	SoupMessage *msg,
@@ -57,8 +64,7 @@ static void img_fetch_callback(
 	if(msg->status_code == SOUP_STATUS_OK) {
 		/* store response data associated with the user id. */
 		char *cached_name = cached_userpic_name(self),
-			*cache_path = g_build_filename(g_get_user_cache_dir(),
-				"piiptyyt", "userpic", cached_name, NULL),
+			*cache_path = cached_userpic_path(cached_name),
 			*write_path = g_strconcat(cache_path, ".tmp", NULL);
 		GError *err = NULL;
 		if(!g_file_set_contents(write_path, msg->response_body->data,
@@ -122,8 +128,19 @@ GdkPixbuf *pt_user_info_get_userpic(PtUserInfo *self, SoupSession *session)
 		if(session != NULL) start_userpic_fetch(self, session);
 		return NULL;
 	} else {
-		/* TODO: access the userpic cache via self->cached_img_name */
-		return NULL;
+		/* TODO: access userpic GdkPixbuf cache by cached_img_name first! */
+		char *filename = cached_userpic_path(self->cached_img_name);
+		GError *err = NULL;
+		GdkPixbuf *ret = gdk_pixbuf_new_from_file(filename, &err);
+		if(ret == NULL) {
+			/* TODO: if this is ENOENT, clear the cached field and set
+			 * dirty.
+			 */
+			g_warning("can't read userpic `%s': %s", filename, err->message);
+			g_error_free(err);
+		}
+		g_free(filename);
+		return ret;
 	}
 }
 
