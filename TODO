@@ -7,10 +7,4 @@ TODO list for piiptyyt:
 	can do a big transaction rather than one transaction per item.
 	[v2] Asynchronous replacement could also be on the cards.
 
-  - Currently there's no nice way to load a structure from a sqlite3 table.
-	Some of the SQL interface code in usercache.c should be moved into
-	format.c and generalized to build the right SQL queries, possibly caching
-	the relevant statements, automagically.
-
-
  vim:tw=78:ts=4:sw=4:fo=ctqn:
