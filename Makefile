@@ -1,8 +1,8 @@
 
 PKGS=gtk+-x11-3.0 libsoup-2.4 json-glib-1.0 sqlite3
 
-CFLAGS:=-std=gnu99 -Wall -O1 -g $(shell pkg-config --cflags $(PKGS)) \
-	$(shell libgcrypt-config --cflags)
+CFLAGS:=-std=gnu99 -Wall -O1 -g -I . -I ccan \
+	$(shell pkg-config --cflags $(PKGS)) $(shell libgcrypt-config --cflags)
 LDFLAGS=
 LIBS:=$(shell pkg-config --libs $(PKGS)) -lgnutls \
 	$(shell libgcrypt-config --libs)
@@ -25,6 +25,7 @@ tags: $(wildcard *.[ch])
 	@ctags -R .
 
 
+# NOTE: ccan/list/list.c is ignored as the checking functions are never used.
 piiptyyt: main.o state.o login.o oauth.o usercache.o format.o \
 		model.o pt-update.o pt-user-info.o
 	@echo " LD $@"
