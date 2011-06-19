@@ -27,7 +27,7 @@ tags: $(wildcard *.[ch])
 
 # NOTE: ccan/list/list.c is ignored as the checking functions are never used.
 piiptyyt: main.o state.o login.o oauth.o usercache.o format.o \
-		model.o pt-update.o pt-user-info.o
+		model.o pt-update.o pt-user-info.o pt-cache.o
 	@echo " LD $@"
 	@$(CC) -o $@ $^ $(CFLAGS) $(LDFLAGS) $(LIBS)
 
