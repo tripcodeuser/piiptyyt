@@ -192,9 +192,8 @@ static void fetch_more_updates(
 	 * about them.
 	 */
 	const char *status_uri = "https://api.twitter.com/1/statuses/home_timeline.json";
-	SoupSession *ss = soup_session_async_new();
 	SoupMessage *msg = make_resource_request_msg(status_uri, state, NULL);
-	soup_session_send_message(ss, msg);
+	soup_session_send_message(model->http_session, msg);
 	if(msg->status_code != SOUP_STATUS_OK) {
 		fprintf(stderr, "could not get twet: %d %s\n", msg->status_code,
 			soup_status_get_phrase(msg->status_code));
@@ -212,7 +211,6 @@ static void fetch_more_updates(
 		}
 	}
 	g_object_unref(msg);
-	g_object_unref(ss);
 }
 
 
@@ -300,10 +298,11 @@ int main(int argc, char *argv[])
 	GtkListStore *tweet_model = GTK_LIST_STORE(ui_object(b, "tweet_model"));
 	gtk_list_store_clear(tweet_model);
 	GtkTreeView *tweet_view = GTK_TREE_VIEW(ui_object(b, "tweet_view"));
+	SoupSession *ss = soup_session_async_new();
 	struct update_model *model = update_model_new(
-		tweet_view, tweet_model);
+		tweet_view, tweet_model, ss);
 
-	g_object_unref(G_OBJECT(b));
+	g_object_unref(b);
 	b = NULL;
 
 	fetch_more_updates(state, uc, model, 20, 0);
@@ -322,6 +321,7 @@ int main(int argc, char *argv[])
 	state_free(state);
 	user_cache_close(uc);
 	update_model_free(model);
+	g_object_unref(ss);
 
 	return EXIT_SUCCESS;
 }

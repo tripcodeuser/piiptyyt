@@ -8,6 +8,7 @@
 #include <glib.h>
 #include <gtk/gtk.h>
 #include <json-glib/json-glib.h>
+#include <libsoup/soup.h>
 #include <sqlite3.h>
 
 
@@ -72,6 +73,7 @@ struct update_model
 	GtkListStore *store;
 	GtkTreeView *view;
 	GtkCellRenderer *update_col_r, *pic_col_r;
+	SoupSession *http_session;
 };
 
 
@@ -85,7 +87,8 @@ extern GQuark piiptyyt_error_domain(void);
 
 extern struct update_model *update_model_new(
 	GtkTreeView *view,
-	GtkListStore *store);
+	GtkListStore *store,
+	SoupSession *session);
 extern void update_model_free(struct update_model *model);
 
 extern void add_updates_to_model(

@@ -2,9 +2,11 @@
 #include <stdlib.h>
 #include <string.h>
 #include <assert.h>
+#include <errno.h>
 #include <glib.h>
 #include <glib-object.h>
 #include <gtk/gtk.h>
+#include <libsoup/soup.h>
 
 #include "defs.h"
 #include "pt-update.h"
@@ -170,7 +172,7 @@ static void set_display_pic_column_from_pt_update(
 	GtkTreeIter *iter,
 	gpointer dataptr)
 {
-//	struct update_model *m = dataptr;
+	struct update_model *m = dataptr;
 
 	PtUpdate *update = PT_UPDATE(get_object_from_model(model, iter, 0));
 	g_return_if_fail(update != NULL);
@@ -178,7 +180,12 @@ static void set_display_pic_column_from_pt_update(
 	GdkPixbuf *upd_pic = NULL;
 	if(update->user != NULL && update->user->screenname != NULL) {
 		/* FIXME: differentiate between forwarder and originator */
-		upd_pic = pt_user_info_get_userpic(update->user);
+		upd_pic = pt_user_info_get_userpic(update->user, m->http_session);
+		if(upd_pic == NULL) {
+			/* FIXME: connect to notify::userpic on `update', recheck the
+			 * property
+			 */
+		}
 	}
 
 	if(upd_pic == NULL) {
@@ -217,18 +224,28 @@ static GtkCellRenderer *set_col_func(
 
 struct update_model *update_model_new(
 	GtkTreeView *view,
-	GtkListStore *store)
+	GtkListStore *store,
+	SoupSession *session)
 {
 	struct update_model *m = g_new(struct update_model, 1);
 	m->count = 0;
 	m->current_ids = NULL;
 	m->store = g_object_ref(store);
 	m->view = g_object_ref(view);
+	m->http_session = g_object_ref(session);
 
 	m->pic_col_r = set_col_func(view, 0,
 		&set_display_pic_column_from_pt_update, m, NULL);
 	m->update_col_r = set_col_func(view, 1,
 		&set_markup_column_from_pt_update, m, NULL);
+
+	char *cache_dir = g_build_filename(g_get_user_cache_dir(),
+		"piiptyyt", "userpic", NULL);
+	int n = g_mkdir_with_parents(cache_dir, 0700);
+	if(n < 0) {
+		g_error("can't create `%s': %s", cache_dir, strerror(errno));
+	}
+	g_free(cache_dir);
 
 	return m;
 }
@@ -240,6 +257,7 @@ void update_model_free(struct update_model *model)
 	g_object_unref(model->view);
 	g_object_unref(model->update_col_r);
 	g_object_unref(model->pic_col_r);
+	g_object_unref(model->http_session);
 	g_free(model->current_ids);
 	g_free(model);
 }

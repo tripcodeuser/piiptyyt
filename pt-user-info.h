@@ -9,6 +9,7 @@
 #include <glib-object.h>
 #include <gtk/gtk.h>
 #include <json-glib/json-glib.h>
+#include <libsoup/soup.h>
 
 #include "defs.h"
 
@@ -27,6 +28,10 @@ typedef struct _pt_user_info_class PtUserInfoClass;
 
 /* an empty user_info occurs when the client has only seen a trimmed user JSON
  * object. those can be recognized by ->screenname == NULL.
+ *
+ * properties:
+ * - "userpic" (GdkPixbuf *, ro). reading is equivalent to
+ *   pt_user_info_get_userpic(obj, NULL) .
  */
 struct user_info
 {
@@ -44,6 +49,7 @@ struct user_info
 	/* non-database, non-json fields */
 	struct user_cache *cache_parent;
 	bool dirty;		/* sync to database on destroy? */
+	SoupMessage *img_fetch_msg;
 };
 
 
@@ -53,8 +59,15 @@ struct _pt_user_info_class
 };
 
 
-/* returns a borrowed GdkPixbuf reference, or NULL when it's not available. */
-extern GdkPixbuf *pt_user_info_get_userpic(struct user_info *info);
+/* returns a borrowed GdkPixbuf reference, or NULL when it's not available.
+ * if `session' is not NULL, and the image is not cached locally, starts a
+ * HTTP transaction with a server using the given session. the transaction's
+ * results can be retrieved by g_object_connect(info, "notify::userpic", ...),
+ * followed by a call to this function with a NULL session.
+ */
+extern GdkPixbuf *pt_user_info_get_userpic(
+	PtUserInfo *info,
+	SoupSession *session);
 
 extern const struct field_desc *pt_user_info_get_field_desc(int *count_p);
 
