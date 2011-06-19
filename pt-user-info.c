@@ -16,7 +16,11 @@
 
 enum prop_names {
 	PROP_USERPIC = 1,
+	PROP__LAST
 };
+
+
+static GParamSpec *properties[PROP__LAST];
 
 
 PtUserInfo *pt_user_info_new(void) {
@@ -75,6 +79,8 @@ static void img_fetch_callback(
 		g_free(self->cached_img_name);
 		self->cached_img_name = cached_name;
 		self->dirty = true;
+
+		g_object_notify_by_pspec(G_OBJECT(self), properties[PROP_USERPIC]);
 
 		/* TODO: store expiry, refresh userimages with appropriate headers for
 		 * "not changed" etc
@@ -193,12 +199,16 @@ static void pt_user_info_class_init(PtUserInfoClass *klass)
 	obj_class->finalize = &pt_user_info_finalize;
 	obj_class->get_property = &pt_user_info_get_property;
 
-	g_object_class_install_property(obj_class, PROP_USERPIC,
-		g_param_spec_object("userpic",
-			"User picture (\"avatar\") connected to this user info",
-			"Get reference to user image as GdkPixbuf",
-			GDK_TYPE_PIXBUF,
-			G_PARAM_READABLE | G_PARAM_STATIC_STRINGS));
+	properties[0] = NULL;	/* for the homies. */
+	properties[PROP_USERPIC] = g_param_spec_object("userpic",
+		"User picture (\"avatar\") connected to this user info",
+		"Get reference to user image as GdkPixbuf",
+		GDK_TYPE_PIXBUF,
+		G_PARAM_READABLE | G_PARAM_STATIC_STRINGS);
+
+	for(int i=1; i < PROP__LAST; i++) {
+		g_object_class_install_property(obj_class, i, properties[i]);
+	}
 }
 
 
