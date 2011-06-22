@@ -186,6 +186,34 @@ START_TEST(replace_with_linger)
 END_TEST
 
 
+START_TEST(flush_on_overwrite)
+{
+	int *counter = g_new0(int, 1);
+	*counter = 0;
+
+	GObject *obj = g_object_new(PT_CACHE_TYPE,
+		"flush-fn", &flush_count_cb,
+		"flush-data", counter,
+		NULL);
+	PtCache *cache = PT_CACHE(obj);
+	fail_unless(cache != NULL);
+
+	GObject *o = g_object_new(G_TYPE_OBJECT, NULL);
+	pt_cache_put(cache, GINT_TO_POINTER(1), 0, o);
+	g_object_unref(o);
+	*counter = 0;
+
+	o = g_object_new(G_TYPE_OBJECT, NULL);
+	pt_cache_put(cache, GINT_TO_POINTER(1), 0, o);
+	g_object_unref(o);
+	fail_unless(*counter > 0, "overwrite must call flush");
+
+	g_object_unref(cache);
+	mark_point();
+}
+END_TEST
+
+
 Suite *pt_cache_suite(void)
 {
 	Suite *s = suite_create("PtCache");
@@ -197,6 +225,7 @@ Suite *pt_cache_suite(void)
 	tcase_add_test(tc_iface, count_flushed_objects);
 	tcase_add_test(tc_iface, provoke_replacement);
 	tcase_add_test(tc_iface, replace_with_linger);
+	tcase_add_test(tc_iface, flush_on_overwrite);
 
 	return s;
 }
