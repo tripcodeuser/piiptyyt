@@ -214,7 +214,7 @@ void pt_cache_put(
 		item = g_slice_new(struct cache_item);
 		ins = true;
 	}
-	item->ref = g_object_ref(object);
+	item->ref = g_object_ref_sink(object);
 	item->key_size = key_size;
 	item->key = key_size == 0 ? (gpointer)key : g_memdup(key, key_size);
 	item->age = 1;

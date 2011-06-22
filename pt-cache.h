@@ -85,8 +85,8 @@ extern GType pt_cache_get_type(void);
 extern GObject *pt_cache_get(PtCache *cache, gconstpointer key);
 
 /* insert a new object into the cache. if the key exists, it is replaced.
- * creates its own reference from `value'. (TODO: make this use
- * g_object_ref_sink() for convenience.)
+ * creates its own reference from `value'. if `value' is a floating reference,
+ * it'll be sunk.
  *
  * if key_size is zero, the key pointer is retained as such. if it is greater
  * than zero, key is retained with that size using g_memdup().
