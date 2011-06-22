@@ -52,12 +52,10 @@ START_TEST(create_put_get_and_destroy)
 	GObject *ret = pt_cache_get(cache, "foo");
 	fail_unless(ret != NULL);
 	fail_unless(ret == first);
-	g_object_unref(ret);
 
 	ret = pt_cache_get(cache, "bar");
 	fail_unless(ret != NULL);
 	fail_unless(ret == second);
-	g_object_unref(ret);
 
 	g_object_unref(cache);
 }

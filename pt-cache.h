@@ -75,12 +75,10 @@ extern GType pt_cache_get_type(void);
  * g_object_new().
  */
 
-/* returns NULL when key isn't found, or adds reference to returned GObject
- * reference. caller should unref the object when done.
+/* returns NULL when key isn't found, or a borrowed reference when an item is
+ * found. caller should ref the return value to retain it.
  *
- * TODO: should return a borrowed reference so as to not require the caller to
- * dispose a "have you got this one yet?" result. (couldn't do this in a
- * multithreaded program. ha ha.)
+ * key presence can therefore be queried with pt_cache_get(c, k) != NULL .
  */
 extern GObject *pt_cache_get(PtCache *cache, gconstpointer key);
 

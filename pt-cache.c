@@ -73,7 +73,7 @@ GObject *pt_cache_get(PtCache *self, gconstpointer key)
 		}
 		if(item->age < UINT32_MAX) item->age++;
 		assert(item->ref != NULL);
-		return g_object_ref(item->ref);
+		return item->ref;
 	}
 }
 
