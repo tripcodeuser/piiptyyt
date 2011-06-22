@@ -96,7 +96,7 @@ START_TEST(count_flushed_objects)
 	g_object_unref(cache);
 	mark_point();
 
-	fail_unless(*counter == NUM_OBJECTS);
+	fail_unless(*counter >= NUM_OBJECTS);
 	g_free(counter);
 }
 END_TEST
@@ -130,7 +130,57 @@ START_TEST(provoke_replacement)
 	g_object_unref(cache);
 	mark_point();
 
-	fail_unless(*counter == NUM_OBJECTS);
+	fail_unless(*counter >= NUM_OBJECTS);
+	g_free(counter);
+}
+END_TEST
+
+
+START_TEST(replace_with_linger)
+{
+	const int NUM_OBJECTS = 3500;
+
+	int *counter = g_new0(int, 1);
+	*counter = 0;
+
+	GObject *obj = g_object_new(PT_CACHE_TYPE,
+		"flush-fn", &flush_count_cb,
+		"flush-data", counter,
+		"high-watermark", 150,
+		"low-watermark", 100,
+		NULL);
+	PtCache *cache = PT_CACHE(obj);
+	fail_unless(cache != NULL);
+
+	GList *retained = NULL;
+	for(int i=0; i < NUM_OBJECTS; i++) {
+		GObject *o = g_object_new(G_TYPE_OBJECT, NULL);
+		pt_cache_put(cache, GINT_TO_POINTER(i + 1), 0, o);
+		if(i % 45 == 0) retained = g_list_prepend(retained, o);
+		else g_object_unref(o);
+
+		if(i % 66 == 0) {
+			GList *node = g_list_last(retained);
+			g_object_unref(node->data);
+			retained = g_list_delete_link(retained, node);
+		}
+	}
+	mark_point();
+
+	fail_unless(*counter > 0, "must have done capacity replacement");
+
+	guint count;
+	g_object_get(cache, "count", &count, NULL);
+	fail_unless(count >= g_list_length(retained));
+
+	g_list_foreach(retained, (GFunc)&g_object_unref, NULL);
+	g_list_free(retained);
+	mark_point();
+
+	g_object_unref(cache);
+	mark_point();
+
+	fail_unless(*counter >= NUM_OBJECTS);
 	g_free(counter);
 }
 END_TEST
@@ -146,6 +196,7 @@ Suite *pt_cache_suite(void)
 	tcase_add_test(tc_iface, create_put_get_and_destroy);
 	tcase_add_test(tc_iface, count_flushed_objects);
 	tcase_add_test(tc_iface, provoke_replacement);
+	tcase_add_test(tc_iface, replace_with_linger);
 
 	return s;
 }

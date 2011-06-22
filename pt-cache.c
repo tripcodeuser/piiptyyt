@@ -11,13 +11,16 @@
 #include "pt-cache.h"
 
 
+#define MAX_REPLACE 128	/* arbitrary. */
+
+
 struct cache_item
 {
 	struct list_node link;
 	GObject *ref;
 	gpointer key;
 	size_t key_size;
-	uint32_t age;
+	uint32_t age;	/* 0 means it's a weak reference. */
 };
 
 
@@ -41,6 +44,16 @@ enum prop_names
 static GParamSpec *properties[PROP__LAST] = { NULL, };
 
 
+static void clear_weak_item_cb(gpointer dataptr, GObject *old_obj)
+{
+	struct cache_item *item = dataptr;
+	assert(item->ref == old_obj);
+	assert(item->age == 0);
+
+	item->ref = NULL;
+}
+
+
 GObject *pt_cache_get(PtCache *self, gconstpointer key)
 {
 	if(self->keys == NULL) return NULL;
@@ -48,15 +61,125 @@ GObject *pt_cache_get(PtCache *self, gconstpointer key)
 	struct cache_item *item = g_hash_table_lookup(self->keys, key);
 	if(item == NULL) return NULL;
 	else {
+		if(item->age == 0) {
+			if(item->ref == NULL) {
+				/* replacement will mop it up. */
+				return NULL;
+			} else {
+				/* un-weaken the reference. */
+				g_object_ref(item->ref);
+				g_object_weak_unref(item->ref, &clear_weak_item_cb, item);
+			}
+		}
 		if(item->age < UINT32_MAX) item->age++;
+		assert(item->ref != NULL);
 		return g_object_ref(item->ref);
+	}
+}
+
+
+static size_t list_length(struct list_head *head)
+{
+	size_t acc = 0;
+	struct cache_item *child;
+	list_for_each(head, child, link) {
+		acc++;
+	}
+	return acc;
+}
+
+
+static void flush_items(
+	PtCache *self,
+	struct cache_item **items,
+	size_t count,
+	size_t *nonr_count_p)
+{
+	assert(count <= MAX_REPLACE);
+	if(count == 0) return;
+
+	if(self->flush_fn != NULL) {
+		GObject *objs[MAX_REPLACE];
+		for(int i=0; i < count; i++) objs[i] = items[i]->ref;
+		(*self->flush_fn)(objs, count, self->flush_data);
+	}
+	for(int i=0; i < count; i++) {
+		struct cache_item *it = items[i];
+		g_object_unref(it->ref);
+
+		/* if the object didn't disappear, record it as
+		 * nonreplaceable.
+		 */
+		if(it->ref != NULL) (*nonr_count_p)++;
+		/* (could eagerly free the item if the ref did disappear, but that
+		 * would require keeping track of self->repl_hand's position and the
+		 * cost of not doing this is just some lingering garbage that
+		 * replacement picks up as the cache is used, so "meh." for that.)
+		 */
 	}
 }
 
 
 static void pt_cache_replace(PtCache *self)
 {
-	/* TODO */
+	struct list_node *hand = self->repl_hand;
+	if(hand == NULL) hand = self->item_list.n.next;
+
+	struct cache_item *r_buf[MAX_REPLACE];
+	int r_count = 0;
+	assert(list_length(&self->item_list) == self->count);
+	size_t nonr_count = 0, start_count = self->count, iters = 0;
+	while(self->count - nonr_count > self->wm_low && iters++ < start_count) {
+		struct cache_item *it = list_entry(hand, struct cache_item, link);
+
+		/* advance in a looping manner. */
+		hand = hand->next;
+		if(hand == &self->item_list.n) {
+			if(list_empty(&self->item_list)) break;
+			else hand = hand->next;
+			assert(hand != &self->item_list.n);
+		}
+
+		if(it->age > 0) {
+			it->age >>= 1;
+			if(it->age == 0) {
+				/* weaken the reference. */
+				g_object_weak_ref(it->ref, &clear_weak_item_cb, it);
+				r_buf[r_count++] = it;
+			}
+		} else if(it->age == 0) {
+			if(it->ref != NULL) nonr_count++;	/* lingering. */
+			else {
+				/* dead item. */
+				list_del_from(&self->item_list, &it->link);
+				assert(g_hash_table_lookup(self->keys, it->key) == it);
+				g_hash_table_remove(self->keys, it->key);
+				if(it->key_size > 0) g_free(it->key);
+				g_slice_free(struct cache_item, it);
+				self->count--;
+			}
+		}
+
+		if(r_count == MAX_REPLACE) {
+			flush_items(self, r_buf, r_count, &nonr_count);
+			r_count = 0;
+		}
+	}
+
+	flush_items(self, r_buf, r_count, &nonr_count);
+
+	self->repl_hand = hand;
+}
+
+
+/* do a full cache replacement loop, aiming to put ->count at ->wm_low. */
+static void pt_cache_replace_full(PtCache *self)
+{
+	size_t before;
+	do {
+		before = self->count;
+		pt_cache_replace(self);
+	} while(before != self->count && self->count > self->wm_low);
 }
 
 
@@ -80,8 +203,8 @@ void pt_cache_put(
 		if(item->key_size > 0) g_free(item->key);
 		ins = false;
 	} else {
+		if(self->count >= self->wm_high) pt_cache_replace_full(self);
 		self->count++;
-		if(self->count > self->wm_high) pt_cache_replace(self);
 
 		item = g_slice_new(struct cache_item);
 		ins = true;
@@ -94,6 +217,9 @@ void pt_cache_put(
 		list_add_tail(&self->item_list, &item->link);
 		g_hash_table_insert(self->keys, item->key, item);
 	}
+
+	assert(list_length(&self->item_list) == self->count);
+	assert(g_hash_table_size(self->keys) == self->count);
 }
 
 
@@ -192,6 +318,8 @@ static void pt_cache_dispose(GObject *object)
 			g_ptr_array_foreach(flushable, (GFunc)&g_object_unref, NULL);
 			g_ptr_array_free(flushable, TRUE);
 		}
+
+		self->repl_hand = NULL;
 	}
 
 	GObjectClass *parent_class = g_type_class_peek_parent(
