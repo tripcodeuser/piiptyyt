@@ -309,9 +309,22 @@ static void pt_cache_dispose(GObject *object)
 			gpointer k, v;
 			while(g_hash_table_iter_next(&iter, &k, &v)) {
 				struct cache_item *item = v;
+				assert(k == item->key);
 				g_hash_table_iter_remove(&iter);
 				if(item->key_size > 0) g_free(item->key);
-				if(item->ref != NULL) g_ptr_array_add(flushable, item->ref);
+				if(item->ref != NULL) {
+					if(item->age == 0) {
+						/* unweaken the reference. */
+						g_object_ref(item->ref);
+						g_object_weak_unref(item->ref, &clear_weak_item_cb,
+							item);
+					}
+					/* if this assert fails, a client has decremented a return
+					 * value from pt_cache_get() when it shouldn't have.
+					 */
+					assert(G_IS_OBJECT(item->ref));
+					g_ptr_array_add(flushable, item->ref);
+				}
 				g_slice_free(struct cache_item, item);
 			}
 			assert(g_hash_table_size(self->keys) == 0);
