@@ -47,7 +47,7 @@ static GParamSpec *properties[PROP__LAST] = { NULL, };
 static void clear_weak_item_cb(gpointer dataptr, GObject *old_obj)
 {
 	struct cache_item *item = dataptr;
-	assert(item->ref == old_obj);
+	assert(item->ref == NULL || item->ref == old_obj);
 	assert(item->age == 0);
 
 	item->ref = NULL;
@@ -199,7 +199,12 @@ void pt_cache_put(
 	bool ins;
 	if(item != NULL) {
 		/* recycle the slot and its presence in the hash table & item list. */
-		if(item->ref != NULL) g_object_unref(item->ref);
+		if(item->ref != NULL) {
+			if(self->flush_fn != NULL) {
+				(*self->flush_fn)(&item->ref, 1, self->flush_data);
+			}
+			g_object_unref(item->ref);
+		}
 		if(item->key_size > 0) g_free(item->key);
 		ins = false;
 	} else {

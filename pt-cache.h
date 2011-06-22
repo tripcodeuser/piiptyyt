@@ -21,9 +21,9 @@ typedef struct _pt_cache PtCache;
 typedef struct _pt_cache_class PtCacheClass;
 
 
-/* called when objects' age reaches 0 or they are flushed on cache
- * destruction. due to lingering references, the flush function may be called
- * on a single object more than once.
+/* called when objects' age reaches 0, they are flushed on cache destruction,
+ * or they are overwritten in pt_cache_put(). due to lingering references, the
+ * flush function may be called on a single object more than once.
  */
 typedef void (*PtCacheFlushFunc)(
 	GObject **objects,
