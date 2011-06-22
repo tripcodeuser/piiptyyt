@@ -21,8 +21,24 @@ typedef struct _pt_cache PtCache;
 typedef struct _pt_cache_class PtCacheClass;
 
 
+/* called when objects are replaced from the cache just before they are
+ * unreffed.
+ */
+typedef void (*PtCacheFlushFunc)(
+	GObject **objects,
+	size_t num_objects,
+	gpointer dataptr);
+
+
 /* a high/low watermark replacing cache. high and low watermarks default to
  * low tens.
+ *
+ * construct-only properties:
+ *   - "hash-fn" (GHashFunc, defaults to g_direct_hash)
+ *   - "equal-fn" (GEqualFunc, defaults to g_direct_equal)
+ *   - "flush-fn" (PtCacheFlushFunc, defaults to NULL [not called])
+ *   - "flush-data" (gpointer, passed to flush-fn)
+ *   - "flush-destroy-notify" (GDestroyNotify for flush-data)
  *
  * properties:
  *   - "high-watermark" (rw uint)
@@ -37,6 +53,12 @@ struct _pt_cache
 	GHashTable *keys;
 	struct list_head item_list;
 	struct list_node *repl_hand;
+
+	GHashFunc hash_fn;
+	GEqualFunc equal_fn;
+	PtCacheFlushFunc flush_fn;
+	gpointer flush_data;
+	GDestroyNotify flush_data_destroy_fn;
 };
 
 
@@ -48,18 +70,22 @@ struct _pt_cache_class
 
 extern GType pt_cache_get_type(void);
 
-/* TODO: to make PtCache derivable, make key_hash and key_equal construct-only
- * properties and create the hashtable lazily.
+/* NOTE: there's no explicit constructor. create PtCache instances with
+ * g_object_new().
  */
-extern PtCache *pt_cache_new(GHashFunc key_hash, GEqualFunc key_equal);
 
 /* returns NULL when key isn't found, or adds reference to returned GObject
  * reference. caller should unref the object when done.
+ *
+ * TODO: should return a borrowed reference so as to not require the caller to
+ * dispose a "have you got this one yet?" result. (couldn't do this in a
+ * multithreaded program. ha ha.)
  */
 extern GObject *pt_cache_get(PtCache *cache, gconstpointer key);
 
 /* insert a new object into the cache. if the key exists, it is replaced.
- * creates its own reference from `value'.
+ * creates its own reference from `value'. (TODO: make this use
+ * g_object_ref_sink() for convenience.)
  *
  * if key_size is zero, the key pointer is retained as such. if it is greater
  * than zero, key is retained with that size using g_memdup().
