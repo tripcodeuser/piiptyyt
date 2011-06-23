@@ -212,6 +212,43 @@ START_TEST(flush_on_overwrite)
 END_TEST
 
 
+/* check that the cache does reasonable reference counting.
+ *
+ * missing: overwrite case.
+ */
+START_TEST(item_destruction)
+{
+	GObject *obj = g_object_new(PT_CACHE_TYPE, NULL);
+	PtCache *cache = PT_CACHE(obj);
+	fail_unless(cache != NULL);
+
+	GObject *o = g_object_new(G_TYPE_OBJECT, NULL),
+		*o2 = g_object_new(G_TYPE_OBJECT, NULL);
+	pt_cache_put(cache, GINT_TO_POINTER(1), 0, o);
+	pt_cache_put(cache, GINT_TO_POINTER(2), 0, o2);
+	gpointer o_ptr = o, o2_ptr = o2;
+	fail_unless(o_ptr != NULL);
+	fail_unless(o2_ptr != NULL);
+	g_object_add_weak_pointer(o, &o_ptr);
+	g_object_add_weak_pointer(o2, &o2_ptr);
+	g_object_unref(o);
+	g_object_unref(o2);
+	mark_point();
+
+	GObject *linger = pt_cache_get(cache, GINT_TO_POINTER(1));
+	fail_unless(linger != NULL);
+	g_object_ref(linger);
+
+	g_object_unref(cache);
+	fail_unless(o_ptr != NULL);
+	fail_unless(o2_ptr == NULL);
+
+	g_object_unref(linger);
+	fail_unless(o_ptr == NULL);
+}
+END_TEST
+
+
 Suite *pt_cache_suite(void)
 {
 	Suite *s = suite_create("PtCache");
@@ -224,6 +261,7 @@ Suite *pt_cache_suite(void)
 	tcase_add_test(tc_iface, provoke_replacement);
 	tcase_add_test(tc_iface, replace_with_linger);
 	tcase_add_test(tc_iface, flush_on_overwrite);
+	tcase_add_test(tc_iface, item_destruction);
 
 	return s;
 }
