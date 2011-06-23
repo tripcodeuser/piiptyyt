@@ -208,6 +208,7 @@ START_TEST(flush_on_overwrite)
 
 	g_object_unref(cache);
 	mark_point();
+	g_free(counter);
 }
 END_TEST
 
