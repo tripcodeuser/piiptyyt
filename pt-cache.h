@@ -21,8 +21,8 @@ typedef struct _pt_cache PtCache;
 typedef struct _pt_cache_class PtCacheClass;
 
 
-/* called when objects' age reaches 0, they are flushed on cache destruction,
- * or they are overwritten in pt_cache_put(). due to lingering references, the
+/* called when objects are replaced, they are flushed on cache destruction, or
+ * they are overwritten in pt_cache_put(). due to lingering references, the
  * flush function may be called on a single object more than once.
  */
 typedef void (*PtCacheFlushFunc)(
@@ -52,8 +52,11 @@ struct _pt_cache
 
 	size_t wm_low, wm_high, count;
 	GHashTable *keys;
-	struct list_head item_list;
-	struct list_node *repl_hand;
+	/* items on the active list have an external reference and are subject
+	 * only to positive aging (on hit).
+	 * items on the inactive list don't, and are eventually replaced.
+	 */
+	struct list_head active_list, inactive_list;
 
 	GHashFunc hash_fn;
 	GEqualFunc equal_fn;
@@ -76,7 +79,9 @@ extern GType pt_cache_get_type(void);
  */
 
 /* returns NULL when key isn't found, or a borrowed reference when an item is
- * found. caller should ref the return value to retain it.
+ * found. caller should ref the return value to retain it. the borrowed
+ * reference is guaranteed to remain valid until the next call to
+ * pt_cache_put() on the same cache.
  *
  * key presence can therefore be queried with pt_cache_get(c, k) != NULL .
  */

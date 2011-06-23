@@ -20,7 +20,8 @@ struct cache_item
 	GObject *ref;
 	gpointer key;
 	size_t key_size;
-	uint32_t age;	/* 0 means it's a weak reference. */
+	PtCache *parent;	/* not a ref */
+	uint32_t age;
 };
 
 
@@ -44,13 +45,31 @@ enum prop_names
 static GParamSpec *properties[PROP__LAST] = { NULL, };
 
 
-static void clear_weak_item_cb(gpointer dataptr, GObject *old_obj)
+static void toggle_last_ref_cb(
+	gpointer dataptr,
+	GObject *obj,
+	gboolean is_last)
 {
 	struct cache_item *item = dataptr;
-	assert(item->ref == NULL || item->ref == old_obj);
-	assert(item->age == 0);
+	assert(item->ref == obj);
 
-	item->ref = NULL;
+	list_del(&item->link);
+	if(!is_last) {
+		list_add_tail(&item->parent->active_list, &item->link);
+	} else if(item->age == 0) {
+		/* a last reference on an old object. remove it immediately. */
+		if(item->parent->flush_fn != NULL) {
+			(*item->parent->flush_fn)(&obj, 1, item->parent->flush_data);
+		}
+		g_object_remove_toggle_ref(obj, &toggle_last_ref_cb, item);
+		assert(g_hash_table_lookup(item->parent->keys, item->key) == item);
+		g_hash_table_remove(item->parent->keys, item->key);
+		if(item->key_size > 0) g_free(item->key);
+		item->parent->count--;
+		g_slice_free(struct cache_item, item);
+	} else {
+		list_add_tail(&item->parent->inactive_list, &item->link);
+	}
 }
 
 
@@ -61,16 +80,6 @@ GObject *pt_cache_get(PtCache *self, gconstpointer key)
 	struct cache_item *item = g_hash_table_lookup(self->keys, key);
 	if(item == NULL) return NULL;
 	else {
-		if(item->age == 0) {
-			if(item->ref == NULL) {
-				/* replacement will mop it up. */
-				return NULL;
-			} else {
-				/* un-weaken the reference. */
-				g_object_ref(item->ref);
-				g_object_weak_unref(item->ref, &clear_weak_item_cb, item);
-			}
-		}
 		if(item->age < UINT32_MAX) item->age++;
 		assert(item->ref != NULL);
 		return item->ref;
@@ -80,6 +89,8 @@ GObject *pt_cache_get(PtCache *self, gconstpointer key)
 
 static size_t list_length(struct list_head *head)
 {
+	if(list_empty(head)) return 0;
+
 	size_t acc = 0;
 	struct cache_item *child;
 	list_for_each(head, child, link) {
@@ -89,13 +100,10 @@ static size_t list_length(struct list_head *head)
 }
 
 
-static void flush_items(
-	PtCache *self,
-	struct cache_item **items,
-	size_t count,
-	size_t *nonr_count_p)
+static void flush_items(PtCache *self, struct cache_item **items, size_t count)
 {
 	assert(count <= MAX_REPLACE);
+	assert(count <= self->count);
 	if(count == 0) return;
 
 	if(self->flush_fn != NULL) {
@@ -105,70 +113,45 @@ static void flush_items(
 	}
 	for(int i=0; i < count; i++) {
 		struct cache_item *it = items[i];
-		g_object_unref(it->ref);
-
-		/* if the object didn't disappear, record it as
-		 * nonreplaceable.
-		 */
-		if(it->ref != NULL) (*nonr_count_p)++;
-		/* (could eagerly free the item if the ref did disappear, but that
-		 * would require keeping track of self->repl_hand's position and the
-		 * cost of not doing this is just some lingering garbage that
-		 * replacement picks up as the cache is used, so "meh." for that.)
-		 */
+		list_del(&it->link);
+		if(self->keys != NULL) {
+			assert(g_hash_table_lookup(self->keys, it->key) == it);
+			g_hash_table_remove(self->keys, it->key);
+		}
+		if(it->key_size > 0) g_free(it->key);
+		g_object_remove_toggle_ref(it->ref, &toggle_last_ref_cb, it);
+		g_slice_free(struct cache_item, it);
 	}
+
+	self->count -= count;
 }
 
 
+/* does one iteration over the inactive_list.
+ *
+ * FIXME: use a repl_hand, terminate as soon as there's wm_low or fewer
+ * inactive items
+ */
 static void pt_cache_replace(PtCache *self)
 {
-	struct list_node *hand = self->repl_hand;
-	if(hand == NULL) hand = self->item_list.n.next;
+	struct list_node *hand = self->inactive_list.n.next;
+	if(hand == &self->inactive_list.n) return;	/* empty */
 
-	struct cache_item *r_buf[MAX_REPLACE];
+	struct cache_item *r_buf[MAX_REPLACE], *it, *next;
 	int r_count = 0;
-	assert(list_length(&self->item_list) == self->count);
-	size_t nonr_count = 0, start_count = self->count, iters = 0;
-	while(self->count - nonr_count > self->wm_low && iters++ < start_count) {
-		struct cache_item *it = list_entry(hand, struct cache_item, link);
-
-		/* advance in a looping manner. */
-		hand = hand->next;
-		if(hand == &self->item_list.n) {
-			if(list_empty(&self->item_list)) break;
-			else hand = hand->next;
-			assert(hand != &self->item_list.n);
-		}
-
-		if(it->age > 0) {
-			it->age >>= 1;
-			if(it->age == 0) {
-				/* weaken the reference. */
-				g_object_weak_ref(it->ref, &clear_weak_item_cb, it);
-				r_buf[r_count++] = it;
+	list_for_each_safe(&self->inactive_list, it, next, link) {
+		if(it->age > 0) it->age >>= 1;
+		else {
+			assert(it->age == 0);
+			r_buf[r_count++] = it;
+			if(r_count == MAX_REPLACE) {
+				flush_items(self, r_buf, r_count);
+				r_count = 0;
 			}
-		} else if(it->age == 0) {
-			if(it->ref != NULL) nonr_count++;	/* lingering. */
-			else {
-				/* dead item. */
-				list_del_from(&self->item_list, &it->link);
-				assert(g_hash_table_lookup(self->keys, it->key) == it);
-				g_hash_table_remove(self->keys, it->key);
-				if(it->key_size > 0) g_free(it->key);
-				g_slice_free(struct cache_item, it);
-				self->count--;
-			}
-		}
-
-		if(r_count == MAX_REPLACE) {
-			flush_items(self, r_buf, r_count, &nonr_count);
-			r_count = 0;
 		}
 	}
 
-	flush_items(self, r_buf, r_count, &nonr_count);
-
-	self->repl_hand = hand;
+	flush_items(self, r_buf, r_count);
 }
 
 
@@ -176,10 +159,19 @@ static void pt_cache_replace(PtCache *self)
 static void pt_cache_replace_full(PtCache *self)
 {
 	size_t before;
+	int active_age = -1;
 	do {
+		active_age++;
 		before = self->count;
 		pt_cache_replace(self);
 	} while(before != self->count && self->count > self->wm_low);
+
+	if(active_age > 0) {
+		struct cache_item *it;
+		list_for_each(&self->active_list, it, link) {
+			it->age >>= active_age;
+		}
+	}
 }
 
 
@@ -199,32 +191,34 @@ void pt_cache_put(
 	bool ins;
 	if(item != NULL) {
 		/* recycle the slot and its presence in the hash table & item list. */
-		if(item->ref != NULL) {
-			if(self->flush_fn != NULL) {
-				(*self->flush_fn)(&item->ref, 1, self->flush_data);
-			}
-			g_object_unref(item->ref);
+		if(self->flush_fn != NULL) {
+			(*self->flush_fn)(&item->ref, 1, self->flush_data);
 		}
+		g_object_remove_toggle_ref(item->ref, &toggle_last_ref_cb, item);
+		list_del(&item->link);
 		if(item->key_size > 0) g_free(item->key);
+		assert(item->parent == self);
 		ins = false;
 	} else {
 		if(self->count >= self->wm_high) pt_cache_replace_full(self);
 		self->count++;
 
 		item = g_slice_new(struct cache_item);
+		item->parent = self;
 		ins = true;
 	}
-	item->ref = g_object_ref_sink(object);
 	item->key_size = key_size;
 	item->key = key_size == 0 ? (gpointer)key : g_memdup(key, key_size);
+	if(ins) g_hash_table_insert(self->keys, item->key, item);
 	item->age = 1;
-	if(ins) {
-		list_add_tail(&self->item_list, &item->link);
-		g_hash_table_insert(self->keys, item->key, item);
-	}
+	item->ref = g_object_ref_sink(object);
+	/* starts out strong. */
+	list_add_tail(&self->active_list, &item->link);
+	g_object_add_toggle_ref(item->ref, &toggle_last_ref_cb, item);
+	g_object_unref(item->ref);	/* might go passive if sunk. */
 
-	assert(list_length(&self->item_list) == self->count);
 	assert(g_hash_table_size(self->keys) == self->count);
+	assert(list_length(&self->active_list) + list_length(&self->inactive_list) == self->count);
 }
 
 
@@ -286,8 +280,8 @@ static void pt_cache_init(PtCache *self)
 	self->count = 0;
 	self->wm_low = 1;
 	self->wm_high = 2;
-	list_head_init(&self->item_list);
-	self->repl_hand = NULL;
+	list_head_init(&self->active_list);
+	list_head_init(&self->inactive_list);
 
 	self->hash_fn = NULL;
 	self->equal_fn = NULL;
@@ -301,43 +295,24 @@ static void pt_cache_dispose(GObject *object)
 {
 	PtCache *self = PT_CACHE(object);
 
-	if(self != NULL) {
-		if(self->keys != NULL) {
-			GPtrArray *flushable = g_ptr_array_new();
-			GHashTableIter iter;
-			g_hash_table_iter_init(&iter, self->keys);
-			gpointer k, v;
-			while(g_hash_table_iter_next(&iter, &k, &v)) {
-				struct cache_item *item = v;
-				assert(k == item->key);
-				g_hash_table_iter_remove(&iter);
-				if(item->key_size > 0) g_free(item->key);
-				if(item->ref != NULL) {
-					if(item->age == 0) {
-						/* unweaken the reference. */
-						g_object_ref(item->ref);
-						g_object_weak_unref(item->ref, &clear_weak_item_cb,
-							item);
-					}
-					/* if this assert fails, a client has decremented a return
-					 * value from pt_cache_get() when it shouldn't have.
-					 */
-					assert(G_IS_OBJECT(item->ref));
-					g_ptr_array_add(flushable, item->ref);
-				}
-				g_slice_free(struct cache_item, item);
-			}
-			assert(g_hash_table_size(self->keys) == 0);
-
-			if(self->flush_fn != NULL) {
-				(*self->flush_fn)((GObject **)flushable->pdata,
-					flushable->len, self->flush_data);
-			}
-			g_ptr_array_foreach(flushable, (GFunc)&g_object_unref, NULL);
-			g_ptr_array_free(flushable, TRUE);
+	if(self != NULL && self->keys != NULL) {
+		GPtrArray *items = g_ptr_array_new();
+		GHashTableIter iter;
+		g_hash_table_iter_init(&iter, self->keys);
+		gpointer k, v;
+		while(g_hash_table_iter_next(&iter, &k, &v)) {
+			struct cache_item *item = v;
+			assert(k == item->key);
+			g_ptr_array_add(items, item);
 		}
+		g_hash_table_destroy(self->keys);
+		self->keys = NULL;
 
-		self->repl_hand = NULL;
+		for(int i=0; i < items->len; i += MAX_REPLACE) {
+			struct cache_item **array = (struct cache_item **)items->pdata;
+			flush_items(self, &array[i], MIN(items->len - i, MAX_REPLACE));
+		}
+		g_ptr_array_free(items, TRUE);
 	}
 
 	GObjectClass *parent_class = g_type_class_peek_parent(
@@ -351,11 +326,12 @@ static void pt_cache_finalize(GObject *object)
 	PtCache *self = PT_CACHE(object);
 
 	if(self != NULL) {
-		g_hash_table_destroy(self->keys);
+		assert(self->keys == NULL);
 
 		if(self->flush_data_destroy_fn != NULL) {
 			(*self->flush_data_destroy_fn)(self->flush_data);
 			self->flush_data_destroy_fn = NULL;
+			self->flush_data = NULL;
 		}
 	}
 
