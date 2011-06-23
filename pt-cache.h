@@ -50,13 +50,14 @@ struct _pt_cache
 {
 	GObject parent_instance;
 
-	size_t wm_low, wm_high, count;
+	size_t wm_low, wm_high, count, active_count;
 	GHashTable *keys;
 	/* items on the active list have an external reference and are subject
 	 * only to positive aging (on hit).
 	 * items on the inactive list don't, and are eventually replaced.
 	 */
 	struct list_head active_list, inactive_list;
+	struct list_node *repl_hand;
 
 	GHashFunc hash_fn;
 	GEqualFunc equal_fn;

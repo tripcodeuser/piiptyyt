@@ -45,6 +45,39 @@ enum prop_names
 static GParamSpec *properties[PROP__LAST] = { NULL, };
 
 
+static size_t list_length(struct list_head *head)
+{
+	if(list_empty(head)) return 0;
+
+	size_t acc = 0;
+	struct cache_item *child;
+	list_for_each(head, child, link) {
+		acc++;
+	}
+	return acc;
+}
+
+
+/* remove an item from its active/inactive list while keeping repl_hand in its
+ * correct position.
+ */
+static void delist_item(struct cache_item *item)
+{
+	PtCache *cache = item->parent;
+	if(&item->link == cache->repl_hand) {
+		cache->repl_hand = cache->repl_hand->next;
+		if(cache->repl_hand == &cache->inactive_list.n) {
+			cache->repl_hand = NULL;
+		}
+	}
+	list_del(&item->link);
+	assert(cache->repl_hand == NULL
+		|| (cache->repl_hand != &item->link
+			&& cache->repl_hand->next != &item->link
+			&& cache->repl_hand->prev != &item->link));
+}
+
+
 static void toggle_last_ref_cb(
 	gpointer dataptr,
 	GObject *obj,
@@ -52,24 +85,30 @@ static void toggle_last_ref_cb(
 {
 	struct cache_item *item = dataptr;
 	assert(item->ref == obj);
+	PtCache *cache = item->parent;
 
-	list_del(&item->link);
+	delist_item(item);
 	if(!is_last) {
-		list_add_tail(&item->parent->active_list, &item->link);
+		list_add_tail(&cache->active_list, &item->link);
+		cache->active_count++;
 	} else if(item->age == 0) {
 		/* a last reference on an old object. remove it immediately. */
-		if(item->parent->flush_fn != NULL) {
-			(*item->parent->flush_fn)(&obj, 1, item->parent->flush_data);
+		if(cache->flush_fn != NULL) {
+			(*cache->flush_fn)(&obj, 1, cache->flush_data);
 		}
 		g_object_remove_toggle_ref(obj, &toggle_last_ref_cb, item);
-		assert(g_hash_table_lookup(item->parent->keys, item->key) == item);
-		g_hash_table_remove(item->parent->keys, item->key);
+		assert(g_hash_table_lookup(cache->keys, item->key) == item);
+		g_hash_table_remove(cache->keys, item->key);
 		if(item->key_size > 0) g_free(item->key);
-		item->parent->count--;
+		cache->count--;
+		cache->active_count--;
 		g_slice_free(struct cache_item, item);
 	} else {
 		list_add_tail(&item->parent->inactive_list, &item->link);
+		cache->active_count--;
 	}
+
+	assert(list_length(&cache->active_list) == cache->active_count);
 }
 
 
@@ -87,19 +126,9 @@ GObject *pt_cache_get(PtCache *self, gconstpointer key)
 }
 
 
-static size_t list_length(struct list_head *head)
-{
-	if(list_empty(head)) return 0;
-
-	size_t acc = 0;
-	struct cache_item *child;
-	list_for_each(head, child, link) {
-		acc++;
-	}
-	return acc;
-}
-
-
+/* NOTE: this expects to only be fed items either from the inactive list, or
+ * from the cache destructor. as such it doesn't need to update active_count.
+ */
 static void flush_items(PtCache *self, struct cache_item **items, size_t count)
 {
 	assert(count <= MAX_REPLACE);
@@ -113,7 +142,7 @@ static void flush_items(PtCache *self, struct cache_item **items, size_t count)
 	}
 	for(int i=0; i < count; i++) {
 		struct cache_item *it = items[i];
-		list_del(&it->link);
+		delist_item(it);
 		if(self->keys != NULL) {
 			assert(g_hash_table_lookup(self->keys, it->key) == it);
 			g_hash_table_remove(self->keys, it->key);
@@ -127,51 +156,54 @@ static void flush_items(PtCache *self, struct cache_item **items, size_t count)
 }
 
 
-/* does one iteration over the inactive_list.
- *
- * FIXME: use a repl_hand, terminate as soon as there's wm_low or fewer
- * inactive items
+/* replaces items from inactive_list until self->count - self->active_count <=
+ * self->wm_low .
  */
-static void pt_cache_replace(PtCache *self)
+static void pt_cache_replace(PtCache *self, int max_iters)
 {
 	struct list_node *hand = self->inactive_list.n.next;
 	if(hand == &self->inactive_list.n) return;	/* empty */
+	if(hand == NULL) hand = self->inactive_list.n.next;
 
-	struct cache_item *r_buf[MAX_REPLACE], *it, *next;
-	int r_count = 0;
-	list_for_each_safe(&self->inactive_list, it, next, link) {
+	struct cache_item *r_buf[MAX_REPLACE];
+	int r_count = 0, iters = 0;
+	while(self->count - self->active_count > self->wm_low
+		&& iters++ < max_iters)
+	{
+		struct cache_item *it = list_entry(hand, struct cache_item, link);
+
+		/* advance the hand. */
+		hand = hand->next;
+		if(hand == &self->inactive_list.n) {
+			hand = self->inactive_list.n.next;
+		}
+
 		if(it->age > 0) it->age >>= 1;
 		else {
 			assert(it->age == 0);
 			r_buf[r_count++] = it;
 			if(r_count == MAX_REPLACE) {
+				self->repl_hand = hand;
 				flush_items(self, r_buf, r_count);
+				hand = self->repl_hand;
 				r_count = 0;
 			}
 		}
 	}
 
+	self->repl_hand = hand;
 	flush_items(self, r_buf, r_count);
 }
 
 
-/* do a full cache replacement loop, aiming to put ->count at ->wm_low. */
 static void pt_cache_replace_full(PtCache *self)
 {
 	size_t before;
-	int active_age = -1;
 	do {
-		active_age++;
 		before = self->count;
-		pt_cache_replace(self);
-	} while(before != self->count && self->count > self->wm_low);
-
-	if(active_age > 0) {
-		struct cache_item *it;
-		list_for_each(&self->active_list, it, link) {
-			it->age >>= active_age;
-		}
-	}
+		pt_cache_replace(self, self->count - self->active_count);
+	} while(self->count - self->active_count > self->wm_low
+		&& before != self->count);
 }
 
 
@@ -195,7 +227,7 @@ void pt_cache_put(
 			(*self->flush_fn)(&item->ref, 1, self->flush_data);
 		}
 		g_object_remove_toggle_ref(item->ref, &toggle_last_ref_cb, item);
-		list_del(&item->link);
+		delist_item(item);
 		if(item->key_size > 0) g_free(item->key);
 		assert(item->parent == self);
 		ins = false;
@@ -214,6 +246,7 @@ void pt_cache_put(
 	item->ref = g_object_ref_sink(object);
 	/* starts out strong. */
 	list_add_tail(&self->active_list, &item->link);
+	self->active_count++;
 	g_object_add_toggle_ref(item->ref, &toggle_last_ref_cb, item);
 	g_object_unref(item->ref);	/* might go passive if sunk. */
 
@@ -278,10 +311,12 @@ static void pt_cache_init(PtCache *self)
 {
 	self->keys = NULL;
 	self->count = 0;
+	self->active_count = 0;
 	self->wm_low = 1;
 	self->wm_high = 2;
 	list_head_init(&self->active_list);
 	list_head_init(&self->inactive_list);
+	self->repl_hand = NULL;
 
 	self->hash_fn = NULL;
 	self->equal_fn = NULL;
