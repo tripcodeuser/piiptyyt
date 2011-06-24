@@ -124,7 +124,6 @@
                 <child>
                   <object class="GtkTreeViewColumn" id="view_userpic_column">
                     <property name="title">userpic</property>
-                    <property name="alignment">0.25999999046325684</property>
                     <child>
                       <object class="GtkCellRendererPixbuf" id="view_userpic_renderer"/>
                     </child>
