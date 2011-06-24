@@ -47,8 +47,6 @@ static GParamSpec *properties[PROP__LAST] = { NULL, };
 
 static size_t list_length(struct list_head *head)
 {
-	if(list_empty(head)) return 0;
-
 	size_t acc = 0;
 	struct cache_item *child;
 	list_for_each(head, child, link) {
