@@ -1,10 +1,13 @@
 
 #include <stddef.h>
 #include <string.h>
+#include <strings.h>
 #include <assert.h>
 #include <glib.h>
 #include <gtk/gtk.h>
 #include <json-glib/json-glib.h>
+#include <libxml/parser.h>
+#include <libxml/tree.h>
 
 #include "defs.h"
 #include "pt-update.h"
@@ -13,13 +16,6 @@
 
 enum prop_names {
 	PROP_MARKUP = 1,
-};
-
-
-struct source_uri_data
-{
-	char **uri;
-	GString *text;
 };
 
 
@@ -39,31 +35,37 @@ static const struct field_desc update_fields[] = {
 };
 
 
-static void source_uri_element(
-	GMarkupParseContext *ctx,
-	const char *element,
-	const char **attr_names,
-	const char **attr_vals,
-	gpointer dataptr,
-	GError **err_p)
-{
-	struct source_uri_data *dat = dataptr;
+struct source_uri_ctx {
+	char **uri;
+	GString *text;
+};
 
+static void source_uri_element(
+	void *dataptr,
+	const xmlChar *name,
+	const xmlChar **attrs)
+{
+	struct source_uri_ctx *dat = dataptr;
+
+	const char *element = (const char *)name;
 	if(strcmp(element, "a") != 0) {
+		/* as in "source" the field in a JSON object. */
 		g_debug("saw element `%s', which is not understood in \"source\"",
 			element);
 		return;
 	}
 
 	const char *rel = NULL, *href = NULL;
-	for(int i=0; attr_names[i] != NULL; i++) {
-		if(strcmp(attr_names[i], "rel") == 0) rel = attr_vals[i];
-		else if(strcmp(attr_names[i], "href") == 0) href = attr_vals[i];
+	for(int i=0; attrs[i] != NULL; i+=2) {
+		const char *n = (const char *)attrs[i + 0],
+			*v = (const char *)attrs[i + 1];
+		if(strcmp(n, "rel") == 0) rel = v;
+		else if(strcmp(n, "href") == 0) href = v;
 		else {
-			g_debug("unknown attribute for `a': `%s'", attr_names[i]);
+			g_debug("unknown attribute for `a': `%s'", n);
 		}
 	}
-	if(strcmp(rel, "nofollow") != 0) {
+	if(rel != NULL && strcasecmp(rel, "nofollow") != 0) {
 		g_debug("unknown value for `a#rel': `%s'", rel);
 	}
 	g_free(*dat->uri);
@@ -71,15 +73,10 @@ static void source_uri_element(
 }
 
 
-static void source_uri_text(
-	GMarkupParseContext *ctx,
-	const char *text,
-	gsize text_len,
-	gpointer dataptr,
-	GError **err_p)
+static void source_uri_characters(void *dataptr, const xmlChar *ch, int len)
 {
-	struct source_uri_data *dat = dataptr;
-	g_string_append_len(dat->text, text, text_len);
+	struct source_uri_ctx *dat = dataptr;
+	g_string_append_len(dat->text, (const char *)ch, len);
 }
 
 
@@ -89,26 +86,16 @@ static bool separate_source_uri(
 	const char *source,
 	GError **err_p)
 {
-	static const GMarkupParser parser = {
-		.start_element = &source_uri_element,
-		.text = &source_uri_text,
-	};
-	struct source_uri_data dat = {
+	struct source_uri_ctx dat = {
 		.uri = source_uri,
 		.text = g_string_sized_new(128),
 	};
-	GMarkupParseContext *ctx = g_markup_parse_context_new(&parser,
-		G_MARKUP_TREAT_CDATA_AS_TEXT | G_MARKUP_PREFIX_ERROR_POSITION,
-		&dat, NULL);
-
-	gboolean ok = g_markup_parse_context_parse(ctx, source, strlen(source),
-		err_p);
-	if(ok) {
-		ok = g_markup_parse_context_end_parse(ctx, err_p);
-	}
-
-	g_markup_parse_context_free(ctx);
-	if(ok) {
+	xmlSAXHandler sax_handler = {
+		.startElement = &source_uri_element,
+		.characters = &source_uri_characters,
+	};
+	int n = xmlSAXUserParseMemory(&sax_handler, &dat, source, strlen(source));
+	if(n >= 0) {
 		*source_text = g_string_free(dat.text, FALSE);
 		return true;
 	} else {
