@@ -92,12 +92,14 @@ static void img_fetch_callback(
 		 * "not changed" etc
 		 */
 
+#if 0
 		printf("userpic for `%s' retrieved (%zd bytes)\n", self->screenname,
 			(ssize_t)msg->response_body->length);
 		const char *expires = soup_message_headers_get_one(
 			msg->response_headers, "Expires");
 		printf("... expires on `%s'.\n",
 			expires != NULL ? expires : "(unknown)");
+#endif
 	} else {
 		g_debug("can't retrieve url `%s' (userpic for uid %llu, `%s')",
 			self->profile_image_url, (unsigned long long)self->id,
@@ -132,10 +134,8 @@ GdkPixbuf *pt_user_info_get_userpic(PtUserInfo *self, SoupSession *session)
 		GObject *obj = pt_cache_get(self->userpic_cache,
 			self->cached_img_name);
 		if(obj != NULL) {
-			printf("userpic hit for `%s'\n", self->cached_img_name);
 			ret = GDK_PIXBUF(g_object_ref(obj));	/* retain */
 		} else {
-			printf("userpic miss for `%s'\n", self->cached_img_name);
 			char *filename = cached_userpic_path(self->cached_img_name);
 			GError *err = NULL;
 			ret = gdk_pixbuf_new_from_file(filename, &err);
