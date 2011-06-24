@@ -234,27 +234,6 @@ static gboolean on_update_interval(gpointer dataptr)
 }
 
 
-struct resize_wrap_ctx {
-	GtkTreeView *treeview;
-	GtkTreeViewColumn *column;
-	GtkCellRenderer *cell;
-};
-
-static void resize_wrap(
-	GtkWidget *widget,
-	GdkRectangle *allocation,
-	gpointer dataptr)
-{
-	struct resize_wrap_ctx *ctx = dataptr;
-
-	int width = gtk_tree_view_column_get_width(ctx->column);
-	g_object_set(ctx->cell,
-		"wrap-width", width - 8,	/* FIXME: arbitrary! make it proper. */
-		"wrap-mode", PANGO_WRAP_WORD,
-		NULL);
-}
-
-
 int main(int argc, char *argv[])
 {
 	g_thread_init(NULL);
@@ -294,13 +273,12 @@ int main(int argc, char *argv[])
 	struct update_model *model = update_model_new(
 		tweet_view, tweet_model, ss);
 
-	struct resize_wrap_ctx rw_ctx = {
-		.treeview = tweet_view,
-		.column = GTK_TREE_VIEW_COLUMN(ui_object(b, "view_tweet_column")),
-		.cell = GTK_CELL_RENDERER(ui_object(b, "view_tweet_renderer")),
-	};
-	g_object_connect(ui_object(b, "tweet_view_scrollwnd"),
-		"signal-after::size-allocate", &resize_wrap, &rw_ctx,
+	/* wrap-width, together with the width of the userpic column, establishes
+	 * the minimum size of the window.
+	 */
+	g_object_set(ui_object(b, "view_tweet_renderer"),
+		"wrap-mode", PANGO_WRAP_WORD,
+		"wrap-width", 220,
 		NULL);
 
 	GObject *main_wnd = ui_object(b, "piiptyyt_main_wnd");
