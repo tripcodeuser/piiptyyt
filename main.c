@@ -78,7 +78,7 @@ GtkBuilder *load_ui(void)
 {
 	GtkBuilder *b = gtk_builder_new();
 	GError *err = NULL;
-	unsigned n = gtk_builder_add_from_file(b, "gui.glade", &err);
+	unsigned n = gtk_builder_add_from_file(b, "piiptyyt.ui", &err);
 	if(n == 0) ERROR_FAIL(err);
 	return b;
 }
