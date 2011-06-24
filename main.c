@@ -214,11 +214,9 @@ static void fetch_more_updates(
 }
 
 
-struct update_interval_ctx
-{
+struct update_interval_ctx {
 	guint event_name;
 };
-
 
 static gboolean on_update_interval(gpointer dataptr)
 {
@@ -233,6 +231,27 @@ static gboolean on_update_interval(gpointer dataptr)
 	ctx->event_name = g_timeout_add(UPDATE_INTERVAL_MSEC,
 		&on_update_interval, ctx);
 	return FALSE;
+}
+
+
+struct resize_wrap_ctx {
+	GtkTreeView *treeview;
+	GtkTreeViewColumn *column;
+	GtkCellRenderer *cell;
+};
+
+static void resize_wrap(
+	GtkWidget *widget,
+	GdkRectangle *allocation,
+	gpointer dataptr)
+{
+	struct resize_wrap_ctx *ctx = dataptr;
+
+	int width = gtk_tree_view_column_get_width(ctx->column);
+	g_object_set(ctx->cell,
+		"wrap-width", width - 8,	/* FIXME: arbitrary! make it proper. */
+		"wrap-mode", PANGO_WRAP_WORD,
+		NULL);
 }
 
 
@@ -268,6 +287,22 @@ int main(int argc, char *argv[])
 		return EXIT_FAILURE;
 	}
 
+	GtkListStore *tweet_model = GTK_LIST_STORE(ui_object(b, "tweet_model"));
+	gtk_list_store_clear(tweet_model);
+	GtkTreeView *tweet_view = GTK_TREE_VIEW(ui_object(b, "tweet_view"));
+	SoupSession *ss = soup_session_async_new();
+	struct update_model *model = update_model_new(
+		tweet_view, tweet_model, ss);
+
+	struct resize_wrap_ctx rw_ctx = {
+		.treeview = tweet_view,
+		.column = GTK_TREE_VIEW_COLUMN(ui_object(b, "view_tweet_column")),
+		.cell = GTK_CELL_RENDERER(ui_object(b, "view_tweet_renderer")),
+	};
+	g_object_connect(ui_object(b, "tweet_view_scrollwnd"),
+		"signal-after::size-allocate", &resize_wrap, &rw_ctx,
+		NULL);
+
 	GObject *main_wnd = ui_object(b, "piiptyyt_main_wnd");
 	g_signal_connect(main_wnd, "delete-event",
 		G_CALLBACK(&main_wnd_delete), NULL);
@@ -294,13 +329,6 @@ int main(int argc, char *argv[])
 			return EXIT_FAILURE;
 		}
 	}
-
-	GtkListStore *tweet_model = GTK_LIST_STORE(ui_object(b, "tweet_model"));
-	gtk_list_store_clear(tweet_model);
-	GtkTreeView *tweet_view = GTK_TREE_VIEW(ui_object(b, "tweet_view"));
-	SoupSession *ss = soup_session_async_new();
-	struct update_model *model = update_model_new(
-		tweet_view, tweet_model, ss);
 
 	g_object_unref(b);
 	b = NULL;
