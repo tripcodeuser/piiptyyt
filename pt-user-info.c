@@ -140,11 +140,28 @@ GdkPixbuf *pt_user_info_get_userpic(PtUserInfo *self, SoupSession *session)
 			GError *err = NULL;
 			ret = gdk_pixbuf_new_from_file(filename, &err);
 			if(ret == NULL) {
-				/* TODO: if this is ENOENT, clear the cached field and set
-				 * dirty.
-				 */
-				g_warning("can't read userpic `%s': %s", filename,
-					err->message);
+				if(err->domain == G_FILE_ERROR
+					&& err->code == G_FILE_ERROR_NOENT)
+				{
+					/* cached file went away. forget it and try again (in the
+					 * case that the image should be refetched).
+					 *
+					 * TODO: if the cache directory becomes inaccessible, this
+					 * spams the userpic server with GET requests and never
+					 * does anything with the data. it should check that case
+					 * and lay off, or shove pics straight into the GdkPixbuf
+					 * cache as soon as they come off the wire.
+					 */
+					g_debug("cached file `%s' went away",
+						self->cached_img_name);
+					g_free(self->cached_img_name);
+					self->cached_img_name = NULL;
+					self->dirty = true;
+					ret = pt_user_info_get_userpic(self, session);
+				} else {
+					g_warning("can't read userpic `%s': %s", filename,
+						err->message);
+				}
 				g_error_free(err);
 			} else {
 				pt_cache_put(self->userpic_cache, self->cached_img_name,
