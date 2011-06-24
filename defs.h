@@ -74,6 +74,7 @@ struct update_model
 	GtkTreeView *view;
 	GtkCellRenderer *update_col_r, *pic_col_r;
 	SoupSession *http_session;
+	GdkPixbuf *default_userpic;
 };
 
 

@@ -187,18 +187,7 @@ static void set_display_pic_column_from_pt_update(
 			 */
 		}
 	}
-
-	if(upd_pic == NULL) {
-		/* TODO: come up with a default image that isn't tablecat */
-		GError *err = NULL;
-		upd_pic = gdk_pixbuf_new_from_file("img/tablecat.png", &err);
-		if(err != NULL) {
-			g_warning("%s: can't read default avatar image: %s",
-				__func__, err->message);
-			g_error_free(err);
-			return;
-		}
-	}
+	if(upd_pic == NULL) upd_pic = g_object_ref(m->default_userpic);
 
 	g_object_set(cell, "pixbuf", upd_pic, NULL);
 	g_object_unref(upd_pic);
@@ -247,6 +236,15 @@ struct update_model *update_model_new(
 	}
 	g_free(cache_dir);
 
+	GError *err = NULL;
+	m->default_userpic = gdk_pixbuf_new_from_file("img/tablecat.png", &err);
+	if(m->default_userpic == NULL || err != NULL) {
+		/* a serious failure. can't operate without cat on table! */
+		g_error("%s: can't read default avatar image: %s",
+			__func__, err->message);
+		g_assert_not_reached();
+	}
+
 	return m;
 }
 
@@ -258,6 +256,7 @@ void update_model_free(struct update_model *model)
 	g_object_unref(model->update_col_r);
 	g_object_unref(model->pic_col_r);
 	g_object_unref(model->http_session);
+	g_object_unref(model->default_userpic);
 	g_free(model->current_ids);
 	g_free(model);
 }
