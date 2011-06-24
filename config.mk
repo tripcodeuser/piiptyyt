@@ -1,4 +1,4 @@
-PKGS=gtk+-x11-3.0 libsoup-2.4 json-glib-1.0 sqlite3
+PKGS=gtk+-2.0 libsoup-2.4 json-glib-1.0 sqlite3
 
 CFLAGS:=-std=gnu99 -Wall -O1 -g -I . -I ccan \
 	$(shell pkg-config --cflags $(PKGS)) $(shell libgcrypt-config --cflags)
