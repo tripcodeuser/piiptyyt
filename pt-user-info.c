@@ -128,18 +128,31 @@ GdkPixbuf *pt_user_info_get_userpic(PtUserInfo *self, SoupSession *session)
 		if(session != NULL) start_userpic_fetch(self, session);
 		return NULL;
 	} else {
-		/* TODO: access userpic GdkPixbuf cache by cached_img_name first! */
-		char *filename = cached_userpic_path(self->cached_img_name);
-		GError *err = NULL;
-		GdkPixbuf *ret = gdk_pixbuf_new_from_file(filename, &err);
-		if(ret == NULL) {
-			/* TODO: if this is ENOENT, clear the cached field and set
-			 * dirty.
-			 */
-			g_warning("can't read userpic `%s': %s", filename, err->message);
-			g_error_free(err);
+		GdkPixbuf *ret;
+		GObject *obj = pt_cache_get(self->userpic_cache,
+			self->cached_img_name);
+		if(obj != NULL) {
+			printf("userpic hit for `%s'\n", self->cached_img_name);
+			ret = GDK_PIXBUF(g_object_ref(obj));	/* retain */
+		} else {
+			printf("userpic miss for `%s'\n", self->cached_img_name);
+			char *filename = cached_userpic_path(self->cached_img_name);
+			GError *err = NULL;
+			ret = gdk_pixbuf_new_from_file(filename, &err);
+			if(ret == NULL) {
+				/* TODO: if this is ENOENT, clear the cached field and set
+				 * dirty.
+				 */
+				g_warning("can't read userpic `%s': %s", filename,
+					err->message);
+				g_error_free(err);
+			} else {
+				pt_cache_put(self->userpic_cache, self->cached_img_name,
+					strlen(self->cached_img_name) + 1, G_OBJECT(ret));
+			}
+			g_free(filename);
 		}
-		g_free(filename);
+
 		return ret;
 	}
 }
@@ -191,6 +204,44 @@ static void pt_user_info_init(PtUserInfo *self)
 	self->cache_parent = NULL;
 	self->dirty = false;
 	self->img_fetch_msg = NULL;
+
+	PtUserInfoClass *klass = PT_USER_INFO_GET_CLASS(self);
+	if(klass->userpic_cache != NULL) {
+		/* use the existing cache. */
+		GObject *obj = g_object_ref(klass->userpic_cache);
+		assert(obj != NULL);
+		self->userpic_cache = PT_CACHE(obj);
+		assert(self->userpic_cache != NULL);
+	} else {
+		/* make a new cache instance and hang it off a weak reference. */
+		GObject *obj = g_object_new(PT_CACHE_TYPE,
+			"hash-fn", &g_str_hash, "equal-fn", &g_str_equal,
+			"high-watermark", 120, "low-watermark", 80,
+			/* no flush function. this cache is read-only. */
+			NULL);
+		self->userpic_cache = PT_CACHE(obj);	/* keep ref */
+		klass->userpic_cache = obj;
+		g_object_add_weak_pointer(obj, &klass->userpic_cache);
+	}
+}
+
+
+static void pt_user_info_dispose(GObject *object)
+{
+	PtUserInfo *self = PT_USER_INFO(object);
+
+	if(self->userpic_cache != NULL) {
+		g_object_unref(self->userpic_cache);
+		self->userpic_cache = NULL;
+	}
+	if(self->img_fetch_msg != NULL) {
+		g_object_unref(self->img_fetch_msg);
+		self->img_fetch_msg = NULL;
+	}
+
+	GObjectClass *parent_class = g_type_class_peek_parent(
+		PT_USER_INFO_GET_CLASS(self));
+	parent_class->dispose(object);
 }
 
 
@@ -198,11 +249,10 @@ static void pt_user_info_finalize(GObject *object)
 {
 	PtUserInfo *self = PT_USER_INFO(object);
 
-	g_free(self->longname);
-	g_free(self->screenname);
-	g_free(self->profile_image_url);
-	g_free(self->cached_img_name);
-	if(self->img_fetch_msg != NULL) g_object_unref(self->img_fetch_msg);
+	g_free(self->longname); self->longname = NULL;
+	g_free(self->screenname); self->screenname = NULL;
+	g_free(self->profile_image_url); self->profile_image_url = NULL;
+	g_free(self->cached_img_name); self->cached_img_name = NULL;
 
 	GObjectClass *parent_class = g_type_class_peek_parent(
 		PT_USER_INFO_GET_CLASS(self));
@@ -212,8 +262,11 @@ static void pt_user_info_finalize(GObject *object)
 
 static void pt_user_info_class_init(PtUserInfoClass *klass)
 {
+	klass->userpic_cache = NULL;
+
 	GObjectClass *obj_class = G_OBJECT_CLASS(klass);
 	obj_class->finalize = &pt_user_info_finalize;
+	obj_class->dispose = &pt_user_info_dispose;
 	obj_class->get_property = &pt_user_info_get_property;
 
 	properties[0] = NULL;	/* for the homies. */

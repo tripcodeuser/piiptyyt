@@ -12,6 +12,7 @@
 #include <libsoup/soup.h>
 
 #include "defs.h"
+#include "pt-cache.h"
 
 
 #define PT_USER_INFO_TYPE (pt_user_info_get_type())
@@ -50,20 +51,24 @@ struct user_info
 	struct user_cache *cache_parent;
 	bool dirty;		/* sync to database on destroy? */
 	SoupMessage *img_fetch_msg;
+	PtCache *userpic_cache;		/* ref */
 };
 
 
 struct _pt_user_info_class
 {
 	GObjectClass parent_class;
+	gpointer userpic_cache;		/* GObject * (really PtCache *), weak ref */
 };
 
 
-/* returns a borrowed GdkPixbuf reference, or NULL when it's not available.
+/* returns a GdkPixbuf reference, or NULL when the image isn't available.
+ *
  * if `session' is not NULL, and the image is not cached locally, starts a
  * HTTP transaction with a server using the given session. the transaction's
- * results can be retrieved by g_object_connect(info, "notify::userpic", ...),
- * followed by a call to this function with a NULL session.
+ * completion will be notified to "notify::userpic". it's likely good practice
+ * to double-check the result after connecting that signal after a "in
+ * progress" outcome.
  */
 extern GdkPixbuf *pt_user_info_get_userpic(
 	PtUserInfo *info,
