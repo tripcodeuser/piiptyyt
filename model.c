@@ -6,6 +6,7 @@
 #include <glib.h>
 #include <glib-object.h>
 #include <gtk/gtk.h>
+#include <gdk-pixbuf/gdk-pixbuf.h>
 #include <libsoup/soup.h>
 
 #include "defs.h"
@@ -237,7 +238,9 @@ struct update_model *update_model_new(
 	g_free(cache_dir);
 
 	GError *err = NULL;
-	m->default_userpic = gdk_pixbuf_new_from_file("img/tablecat.png", &err);
+	/* TODO: get userpic height from config */
+	m->default_userpic = gdk_pixbuf_new_from_file_at_scale(
+		"img/tablecat.png", 48, -1, TRUE, &err);
 	if(m->default_userpic == NULL || err != NULL) {
 		/* a serious failure. can't operate without cat on table! */
 		g_error("%s: can't read default avatar image: %s",

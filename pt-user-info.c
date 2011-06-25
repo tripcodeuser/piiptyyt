@@ -7,6 +7,7 @@
 #include <glib.h>
 #include <glib-object.h>
 #include <gtk/gtk.h>
+#include <gdk-pixbuf/gdk-pixbuf.h>
 #include <json-glib/json-glib.h>
 #include <libsoup/soup.h>
 
@@ -138,7 +139,9 @@ GdkPixbuf *pt_user_info_get_userpic(PtUserInfo *self, SoupSession *session)
 		} else {
 			char *filename = cached_userpic_path(self->cached_img_name);
 			GError *err = NULL;
-			ret = gdk_pixbuf_new_from_file(filename, &err);
+			/* TODO: make scale configurable */
+			ret = gdk_pixbuf_new_from_file_at_scale(
+				filename, 48, -1, TRUE, &err);
 			if(ret == NULL) {
 				if(err->domain == G_FILE_ERROR
 					&& err->code == G_FILE_ERROR_NOENT)
