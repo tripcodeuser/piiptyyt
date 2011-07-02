@@ -98,11 +98,11 @@ static bool do_sql(sqlite3 *db, const char *sql, GError **err_p)
 {
 	char *errmsg = NULL;
 	int n = sqlite3_exec(db, sql, NULL, NULL, &errmsg);
-	if(n != SQLITE_OK) {
+	if(n == SQLITE_OK) return true;
+	else {
 		g_set_error(err_p, 0, 0, "%s", errmsg);
+		sqlite3_free(errmsg);
 		return false;
-	} else {
-		return true;
 	}
 }
 
@@ -238,6 +238,7 @@ PtCache *user_cache_open(void)
 		"flush-data", c,
 		NULL);
 	g_dataset_id_set_data(cache, cache_db_key, c);
+	assert(GET_DB(cache) == c);
 
 	return cache;
 
@@ -253,11 +254,11 @@ void user_cache_close(PtCache *cache)
 	struct cache_db *c = GET_DB(cache);
 	g_return_if_fail(c != NULL);
 
+	g_object_unref(cache);
+
 	g_dataset_id_remove_data(c, cache_db_key);
 	sqlite3_close(c->db);
 	g_free(c);
-
-	g_object_unref(cache);
 }
 
 
