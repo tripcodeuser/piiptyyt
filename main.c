@@ -214,6 +214,47 @@ static void fetch_more_updates(
 }
 
 
+struct tv_size_alloc_ctx {
+	int old_width;
+	GtkCellRendererText *status_cellr;
+	GtkTreeViewColumn *status_column;
+};
+
+/* based on "on_treeview_width_changed" from the gWit twitter client.
+ * respect is due.
+ */
+static void on_tv_size_allocate(
+	GtkWidget *widget,
+	const GdkRectangle *allocation,
+	gpointer dataptr)
+{
+	GtkTreeView *tv = GTK_TREE_VIEW(widget);
+	struct tv_size_alloc_ctx *self = dataptr;
+
+	int cols_width = 0;
+	for(int c=0; ; c++) {
+		GtkTreeViewColumn *col = gtk_tree_view_get_column(tv, c);
+		if(col == self->status_column) continue;
+		if(col == NULL) break;
+
+		int cw = 0;
+		g_object_get(col, "width", &cw, NULL);
+		cols_width += cw;
+	}
+
+	/* 10 pixels for margin. */
+	int text_width = allocation->width - cols_width - 10;
+	/* distinguish from spurious events, such as when rows are added */
+	if(self->old_width != text_width) {
+		self->old_width = text_width;
+		g_object_set(self->status_cellr,
+			"wrap-width", text_width,
+			"wrap-mode", PANGO_WRAP_WORD,
+			NULL);
+	}
+}
+
+
 struct update_interval_ctx {
 	guint event_name;
 };
@@ -273,13 +314,35 @@ int main(int argc, char *argv[])
 	struct update_model *model = update_model_new(
 		tweet_view, tweet_model, ss);
 
+#if 1
+	/* the semi-sucky brute force solution. see below for related whining.
+	 *
+	 * TODO: make this per-window once multiaccount support and the like kick
+	 * in. it's really one-per-tweetview.
+	 */
+	struct tv_size_alloc_ctx *tvsa = g_malloc0(sizeof(*tvsa));
+	tvsa->status_cellr = GTK_CELL_RENDERER_TEXT(
+		ui_object(b, "view_tweet_renderer"));
+	tvsa->status_column = GTK_TREE_VIEW_COLUMN(
+		ui_object(b, "view_tweet_column"));
+	g_object_connect(tweet_view,
+		"signal::size-allocate", &on_tv_size_allocate, tvsa,
+		NULL);
+#else
 	/* wrap-width, together with the width of the userpic column, establishes
 	 * the minimum size of the window.
+	 *
+	 * TODO: this'd be the ideal solution, but sadly it cannot be: gtk+ 3.0.10
+	 * completely fails to query table column cells for their preferred height
+	 * _given_ a width. instead the height is computed according to preferred
+	 * width, which in GtkCellRendererText's case is the minimum width. this
+	 * makes columns longer than they should be.
 	 */
 	g_object_set(ui_object(b, "view_tweet_renderer"),
 		"wrap-mode", PANGO_WRAP_WORD,
 		"wrap-width", 220,
 		NULL);
+#endif
 
 	GObject *main_wnd = ui_object(b, "piiptyyt_main_wnd");
 	g_signal_connect(main_wnd, "delete-event",
