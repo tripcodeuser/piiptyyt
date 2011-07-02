@@ -314,6 +314,13 @@ int main(int argc, char *argv[])
 	struct update_model *model = update_model_new(
 		tweet_view, tweet_model, ss);
 
+	g_object_set(ui_object(b, "view_userpic_renderer"),
+		"yalign", 0.0f,
+		NULL);
+	GtkCellRendererText *status_cr = GTK_CELL_RENDERER_TEXT(
+		ui_object(b, "view_tweet_renderer"));
+	g_object_set(status_cr, "yalign", 0.0f, NULL);
+
 #if 1
 	/* the semi-sucky brute force solution. see below for related whining.
 	 *
@@ -321,8 +328,7 @@ int main(int argc, char *argv[])
 	 * in. it's really one-per-tweetview.
 	 */
 	struct tv_size_alloc_ctx *tvsa = g_malloc0(sizeof(*tvsa));
-	tvsa->status_cellr = GTK_CELL_RENDERER_TEXT(
-		ui_object(b, "view_tweet_renderer"));
+	tvsa->status_cellr = status_cr;
 	tvsa->status_column = GTK_TREE_VIEW_COLUMN(
 		ui_object(b, "view_tweet_column"));
 	g_object_connect(tweet_view,
