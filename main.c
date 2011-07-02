@@ -10,6 +10,7 @@
 
 #include "defs.h"
 #include "pt-update.h"
+#include "pt-cache.h"
 
 
 #define UPDATE_INTERVAL_MSEC (15 * 1000)
@@ -141,7 +142,7 @@ SoupMessage *make_resource_request_msg(
 static GPtrArray *parse_update_array(
 	const void *data,
 	size_t length,
-	struct user_cache *uc,
+	PtCache *user_cache,
 	GError **err_p)
 {
 	JsonParser *parser = json_parser_new();
@@ -164,7 +165,7 @@ static GPtrArray *parse_update_array(
 		cur = g_list_next(cur))
 	{
 		PtUpdate *u = pt_update_new_from_json(
-			json_node_get_object(cur->data), uc, err_p);
+			json_node_get_object(cur->data), user_cache, err_p);
 		if(u == NULL) {
 			g_ptr_array_free(updates, TRUE);
 			updates = NULL;
@@ -183,7 +184,7 @@ static GPtrArray *parse_update_array(
 
 static void fetch_more_updates(
 	struct piiptyyt_state *state,
-	struct user_cache *uc,
+	PtCache *user_cache,
 	struct update_model *model,
 	size_t max_count,
 	uint64_t low_update_id)
@@ -200,7 +201,7 @@ static void fetch_more_updates(
 	} else {
 		GError *err = NULL;
 		GPtrArray *updates = parse_update_array(msg->response_body->data,
-			msg->response_body->length, uc, &err);
+			msg->response_body->length, user_cache, &err);
 		if(updates == NULL) {
 			fprintf(stderr, "can't parse updates: %s\n", err->message);
 			g_error_free(err);
@@ -301,7 +302,7 @@ int main(int argc, char *argv[])
 	}
 
 	/* FIXME: stick this in a global somewhere */
-	struct user_cache *uc = user_cache_open();
+	PtCache *uc = user_cache_open();
 	if(uc == NULL) {
 		fprintf(stderr, "can't open user cache!\n");
 		return EXIT_FAILURE;
@@ -394,8 +395,8 @@ int main(int argc, char *argv[])
 	/* TODO: check errors etc */
 	state_write(state, NULL);
 	state_free(state);
-	user_cache_close(uc);
 	update_model_free(model);
+	user_cache_close(uc);
 	g_object_unref(ss);
 
 	return EXIT_SUCCESS;

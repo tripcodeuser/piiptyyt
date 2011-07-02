@@ -16,22 +16,16 @@
 #include "pt-user-info.h"
 
 
-/* this caching mechanism's replacement policy is far too eager considering
- * that a single item falling to 0 references may cause a full disk sync at
- * worst. a reference-counted LRU list with a high/low watermark policy would
- * be more appropriate, and one should be designed and implemented before
- * v1.0. it'll have two use cases in piiptyyt, the second being caching of
- * actual updates.
- */
-struct user_cache
-{
+#define GET_DB(cache) (struct cache_db *)g_dataset_id_get_data((cache), \
+	cache_db_key)
+
+
+struct cache_db {
 	sqlite3 *db;
-	GCache *user_info_cache;
 };
 
 
-/* used by functions serving user_info_cache */
-static struct user_cache *current_cache;
+static GQuark cache_db_key = 0;
 
 
 static void set_sqlite_error(GError **err_p, sqlite3 *db)
@@ -41,8 +35,8 @@ static void set_sqlite_error(GError **err_p, sqlite3 *db)
 }
 
 
-static struct user_info *fetch_user_info(
-	struct user_cache *c,
+static PtUserInfo *fetch_user_info(
+	struct cache_db *c,
 	uint64_t userid,
 	GError **err_p)
 {
@@ -85,18 +79,14 @@ static bool load_schema(sqlite3 *db)
 }
 
 
-/* functions for user_info_cache */
-static gpointer user_info_fetch_or_new(gpointer keyptr)
+/* returns new reference. */
+static PtUserInfo *new_or_fetch(struct cache_db *c, uint64_t key)
 {
-	struct user_cache *c = current_cache;
-	uint64_t key = (uintptr_t)keyptr;
-
-	struct user_info *ui = fetch_user_info(c, key, NULL);
+	PtUserInfo *ui = fetch_user_info(c, key, NULL);
 	if(ui == NULL) {
 		/* make up a "that's all" record */
 		ui = pt_user_info_new();
 		ui->id = key;
-		ui->cache_parent = c;
 		ui->dirty = false;
 	}
 
@@ -118,8 +108,8 @@ static bool do_sql(sqlite3 *db, const char *sql, GError **err_p)
 
 
 static bool flush_user_info(
-	struct user_cache *c,
-	const struct user_info *ui,
+	struct cache_db *c,
+	const PtUserInfo *ui,
 	GError **err_p)
 {
 	int n_fields = 0;
@@ -138,24 +128,25 @@ static bool flush_user_info(
 }
 
 
-static void user_info_free(struct user_info *ui)
+static void user_info_flush(
+	GObject **objects,
+	size_t num_objects,
+	gpointer dataptr)
 {
-	if(ui == NULL) return;
-
+	if(num_objects == 0) return;
+	struct cache_db *c = dataptr;
 	GError *err = NULL;
-	if(!flush_user_info(current_cache, ui, &err)) {
-#ifndef NDEBUG
-		g_warning("flush_user_info failed: %s  (code %d)",
-			err->message, err->code);
-#endif
-		g_error_free(err);
-		/* it's only a cache. proceed. */
+	/* TODO: stick a transaction bracket around this. */
+	for(size_t i=0; i < num_objects; i++) {
+		PtUserInfo *inf = PT_USER_INFO(objects[i]);
+		assert(err == NULL);
+		if(!flush_user_info(c, inf, &err)) {
+			g_warning("can't flush user info for %llu: %s",
+				(unsigned long long)inf->id, err->message);
+			g_error_free(err);
+			err = NULL;
+		}
 	}
-
-	ui->dirty = false;
-	ui->cache_parent = NULL;
-
-	g_object_unref(ui);
 }
 
 
@@ -182,23 +173,23 @@ static uint32_t double_jenkins(uint64_t x)
 }
 
 
-static guint user_info_hash(struct user_info *ui) {
-	return double_jenkins(ui->id);
+static guint uint64_hash(gconstpointer keyptr) {
+	return double_jenkins(*(const uint64_t *)keyptr);
 }
 
 
-static gpointer direct_dup(gpointer ptr) {
-	return ptr;
+static gboolean uint64_equal(gconstpointer a, gconstpointer b) {
+	return *(const uint64_t *)a == *(const uint64_t *)b;
 }
 
 
-static void direct_free(gpointer ptr) {
-	/* nothing at all. */
-}
-
-
-struct user_cache *user_cache_open(void)
+PtCache *user_cache_open(void)
 {
+	if(cache_db_key == 0) {
+		cache_db_key = g_quark_from_static_string("usercache db dataset key");
+		assert(cache_db_key != 0);
+	}
+
 	char *db_dir = g_build_filename(g_get_user_cache_dir(),
 		"piiptyyt", NULL);
 	int n = g_mkdir_with_parents(db_dir, 0700);
@@ -211,7 +202,7 @@ struct user_cache *user_cache_open(void)
 	char *db_path = g_build_filename(db_dir, "cache.sqlite3", NULL);
 	g_free(db_dir);
 
-	struct user_cache *c = g_new0(struct user_cache, 1);
+	struct cache_db *c = g_new(struct cache_db, 1);
 	n = sqlite3_open_v2(db_path, &c->db,
 		SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE, NULL);
 	g_free(db_path);
@@ -225,7 +216,7 @@ struct user_cache *user_cache_open(void)
 	 * found" error.
 	 */
 	GError *err = NULL;
-	struct user_info *test_user = fetch_user_info(c, 1, &err);
+	PtUserInfo *test_user = fetch_user_info(c, 1, &err);
 	if(test_user == NULL && err != NULL
 		&& strstr(err->message, "no such table") != NULL)
 	{
@@ -235,19 +226,20 @@ struct user_cache *user_cache_open(void)
 			goto fail;
 		}
 	} else if(test_user != NULL) {
-		/* FIXME: free it */
+		g_object_unref(test_user);
 	}
 	if(err != NULL) g_error_free(err);
 
-	/* GCache's interface is sort of shitty. this set of functions uses a
-	 * module-global variable for context.
-	 */
-	c->user_info_cache = g_cache_new((GCacheNewFunc)&user_info_fetch_or_new,
-		(GCacheDestroyFunc)&user_info_free,
-		&direct_dup, &direct_free, &g_direct_hash, (GHashFunc)&user_info_hash,
-		&g_direct_equal);
+	PtCache *cache = g_object_new(PT_CACHE_TYPE,
+		"high-watermark", 1000, "low-watermark", 600,
+		"hash-fn", &uint64_hash,
+		"equal-fn", &uint64_equal,
+		"flush-fn", &user_info_flush,
+		"flush-data", c,
+		NULL);
+	g_dataset_id_set_data(cache, cache_db_key, c);
 
-	return c;
+	return cache;
 
 fail:
 	sqlite3_close(c->db);
@@ -256,21 +248,34 @@ fail:
 }
 
 
-void user_cache_close(struct user_cache *c)
+void user_cache_close(PtCache *cache)
 {
-	g_cache_destroy(c->user_info_cache);
+	struct cache_db *c = GET_DB(cache);
+	g_return_if_fail(c != NULL);
+
+	g_dataset_id_remove_data(c, cache_db_key);
 	sqlite3_close(c->db);
 	g_free(c);
+
+	g_object_unref(cache);
 }
 
 
-struct user_info *user_info_get(struct user_cache *c, uint64_t uid)
+PtUserInfo *get_user_info(PtCache *cache, uint64_t uid)
 {
-	gpointer key = (gpointer)(uintptr_t)uid;
-	current_cache = c;
-	struct user_info *ui = g_cache_insert(c->user_info_cache, key);
-	assert(ui->id == uid);
-	return ui;
+	PtUserInfo *inf;
+	GObject *val = pt_cache_get(cache, &uid);
+	if(val != NULL) inf = PT_USER_INFO(val);
+	else {
+		inf = new_or_fetch(GET_DB(cache), uid);
+		/* FIXME: strengthen the pt_cache_put() interface so that the
+		 * following code has spec-properly borrowed the cache's reference and
+		 * not just de facto.
+		 */
+		pt_cache_put(cache, &inf->id, 0, G_OBJECT(inf));
+		g_object_unref(inf);
+	}
+	return inf;
 }
 
 
@@ -282,42 +287,37 @@ struct user_info *user_info_get(struct user_cache *c, uint64_t uid)
  * this function's purpose is a bit confused. the design isn't at all clean. i
  * blame the pipeweed.
  */
-struct user_info *user_info_get_from_json(
-	struct user_cache *c,
-	JsonObject *obj)
+PtUserInfo *get_user_info_from_json(PtCache *cache, JsonObject *obj)
 {
 	uint64_t uid = json_object_get_int_member(obj, "id");
 	if(uid == 0) return NULL;
-	gpointer key = (gpointer)(uintptr_t)uid;
 
-	current_cache = c;
-	struct user_info *ui = g_cache_insert(c->user_info_cache, key);
-	bool bare = (ui->screenname == NULL);
+	PtUserInfo *inf;
+	GObject *ent = pt_cache_get(cache, &uid);
+	if(ent != NULL) inf = PT_USER_INFO(ent);
+	else {
+		inf = get_user_info(cache, uid);
+		if(inf == NULL) return NULL;
+	}
+
+	bool bare = (inf->screenname == NULL);
 	bool changed = true;	/* TODO: hunt */
 	GError *err = NULL;
-	/* FIXME: on failure pt_user_info_from_json() may leave *ui in a halfway
+	/* FIXME: on failure pt_user_info_from_json() may leave *inf in a halfway
 	 * state. really what should be done is deserialize into a distinct object
 	 * and copy changed values one at a time, returning number of such fields.
 	 */
-	if(!pt_user_info_from_json(ui, obj, &err)) {
+	if(!pt_user_info_from_json(inf, obj, &err)) {
 		g_warning("%s: parsing user info json: %s", __func__, err->message);
 		g_error_free(err);
 
-		current_cache = c;
-		g_cache_remove(c->user_info_cache, ui);
-		ui = NULL;
+		/* should remove the item from the cache. (store a NULL on top?)
+		 * but see fixme above.
+		 */
+		inf = NULL;
 	} else {
-		ui->dirty = ui->dirty || bare || changed;
+		inf->dirty = inf->dirty || bare || changed;
 	}
 
-	return ui;
-}
-
-
-void user_info_put(struct user_info *ui)
-{
-	if(ui == NULL) return;
-
-	current_cache = ui->cache_parent;
-	g_cache_remove(ui->cache_parent->user_info_cache, ui);
+	return inf;
 }

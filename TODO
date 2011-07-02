@@ -1,10 +1,8 @@
 
 TODO list for piiptyyt:
 
-  - GCache's eviction policy is far too eager. There should instead be a cache
-	data structure that uses some kind of low/high watermark basis for
-	replacement, and pushes items to the release function in groups so that it
-	can do a big transaction rather than one transaction per item.
-	[v2] Asynchronous replacement could also be on the cards.
+  - PtCache should be made aware of "dirty" items, and to clean them on
+	command.
+	[v2] Asynchronous cleaning and replacement could also be on the cards.
 
  vim:tw=78:ts=4:sw=4:fo=ctqn:

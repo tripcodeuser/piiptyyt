@@ -48,7 +48,6 @@ struct user_info
 	time_t cached_img_expires;
 
 	/* non-database, non-json fields */
-	struct user_cache *cache_parent;
 	bool dirty;		/* sync to database on destroy? */
 	SoupMessage *img_fetch_msg;
 	PtCache *userpic_cache;		/* ref */

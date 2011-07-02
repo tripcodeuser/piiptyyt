@@ -221,7 +221,6 @@ static void pt_user_info_init(PtUserInfo *self)
 	self->profile_image_url = NULL;
 	self->cached_img_name = NULL;
 
-	self->cache_parent = NULL;
 	self->dirty = false;
 	self->img_fetch_msg = NULL;
 

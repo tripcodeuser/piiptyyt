@@ -112,18 +112,23 @@ PtUpdate *pt_update_new(void) {
 
 PtUpdate *pt_update_new_from_json(
 	JsonObject *obj,
-	struct user_cache *uc,
+	PtCache *user_cache,
 	GError **err_p)
 {
 	PtUpdate *u = pt_update_new();
 	if(!format_from_json(u, obj,
 		update_fields, G_N_ELEMENTS(update_fields), err_p))
 	{
-		g_object_unref(G_OBJECT(u));
+		g_object_unref(u);
 		u = NULL;
-	} else if(uc != NULL && !json_object_get_null_member(obj, "user")) {
+	} else if(user_cache != NULL
+		&& !json_object_get_null_member(obj, "user"))
+	{
 		JsonObject *user = json_object_get_object_member(obj, "user");
-		if(user != NULL) u->user = user_info_get_from_json(uc, user);
+		if(user != NULL) {
+			u->user = get_user_info_from_json(user_cache, user);
+			if(u->user != NULL) g_object_ref(u->user);
+		}
 	}
 
 	char *new_src = NULL;
@@ -213,7 +218,7 @@ static void pt_update_dispose(GObject *object)
 	if(u == NULL) return;
 
 	if(u->user != NULL) {
-		user_info_put(u->user);
+		g_object_unref(u->user);
 		u->user = NULL;
 	}
 	g_date_time_unref(u->timestamp);

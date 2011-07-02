@@ -52,8 +52,6 @@ struct field_desc
 #define FLD(s, type, name) FIELD(s, type, name, #name)
 
 
-struct user_cache;
-
 struct update;			/* in "pt-update.h" */
 struct user_info;		/* in "pt-user-info.h" */
 
@@ -100,18 +98,15 @@ extern void add_updates_to_model(
 
 /* from usercache.c */
 
-extern struct user_cache *user_cache_open(void);
-extern void user_cache_close(struct user_cache *uc);
-extern struct user_info *user_info_get(
-	struct user_cache *uc,
-	uint64_t id);
-/* TODO: add flag to control updating when already found, and given a full
- * record
+extern struct _pt_cache *user_cache_open(void);
+extern void user_cache_close(struct _pt_cache *uc);	/* unrefs "uc" */
+/* get_user_info*() return borrowed references. they are valid until the next
+ * usercache call unless retained.
  */
-extern struct user_info *user_info_get_from_json(
-	struct user_cache *uc,
+extern struct user_info *get_user_info(struct _pt_cache *ui_cache, uint64_t id);
+extern struct user_info *get_user_info_from_json(
+	struct _pt_cache *cache,
 	JsonObject *userinfo_obj);
-extern void user_info_put(struct user_info *info);
 
 
 /* from state.c */

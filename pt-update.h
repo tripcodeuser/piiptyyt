@@ -70,7 +70,7 @@ extern GType pt_update_get_type(void);
 extern PtUpdate *pt_update_new(void);
 extern PtUpdate *pt_update_new_from_json(
 	JsonObject *obj,
-	struct user_cache *uc,
+	struct _pt_cache *user_cache,
 	GError **err_p);
 
 /* get the GdkPixbuf representing the avatar picture to be displayed next to
