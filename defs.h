@@ -96,7 +96,13 @@ extern void add_updates_to_model(
 	size_t num_updates);
 
 
-/* from usercache.c */
+/* from usercache.c
+ *
+ * the PtCache reference may be shared using g_object_ref(), but it should
+ * only be unreffed with user_cache_close(). that function sniffs out whether
+ * the cache went away this time or not and closes the database as
+ * appropriate.
+ */
 
 extern struct _pt_cache *user_cache_open(void);
 extern void user_cache_close(struct _pt_cache *uc);	/* unrefs "uc" */

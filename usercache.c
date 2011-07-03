@@ -254,11 +254,17 @@ void user_cache_close(PtCache *cache)
 	struct cache_db *c = GET_DB(cache);
 	g_return_if_fail(c != NULL);
 
+	gpointer dead = cache;
+	g_object_add_weak_pointer(G_OBJECT(cache), &dead);
 	g_object_unref(cache);
-
-	g_dataset_id_remove_data(c, cache_db_key);
-	sqlite3_close(c->db);
-	g_free(c);
+	if(dead == NULL) {
+		/* that was the last reference. toss the database. */
+		g_dataset_id_remove_data(c, cache_db_key);
+		sqlite3_close(c->db);
+		g_free(c);
+	} else {
+		g_object_remove_weak_pointer(G_OBJECT(cache), &dead);
+	}
 }
 
 
